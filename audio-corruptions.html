@@ -348,18 +348,6 @@
     <!-- Audio Engine & Control Script -->
     
     <script>
-        function initAudioContext() {
-    if (!audioCtx) {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        audioCtx = new AudioContextClass();
-        
-        // Route audio through iOS/Android media channel for lock-screen controls
-        if ('audioSession' in navigator) {
-            navigator.audioSession.type = 'playback';
-        }
-        
-        mainGainNode = audioCtx.createGain();
-        // ... rest of your existing nodes ...
         // WebAudio Nodes & Audio State
         let audioCtx = null;
         let audioBuffer = null;

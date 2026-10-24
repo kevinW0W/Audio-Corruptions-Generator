@@ -1,0 +1,10 @@
+# Local HTTPS development keys, certificates, and device-specific profiles
+PWA/local-dev-key.pem
+PWA/local-dev-cert.pem
+PWA/local-dev-cert.cer
+PWA/Audio-Corruption-WebClip.mobileconfig
+Audio-Corruption-WebClip.mobileconfig
+
+# Local-only server and profile generator contain this computer's network URL
+serve_https.py
+PWA/make-ios-webclip.py

@@ -1,0 +1,2383 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#080c14">
+    <title>Audio Corruption</title>
+    <link rel="icon" type="image/svg+xml" href="audio-corruptions.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-v2.png">
+    <link rel="stylesheet" href="audio-corruptions.css">
+    <!-- Lucide Icons -->
+    <script src="vendor/lucide.min.js"></script>
+    <script src="vendor/lame.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #080c14;
+            color: #f1f5f9;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .font-mono {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+        }
+
+        /* Prevent focus rings & outline flashes */
+        *:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Clean Modern Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #1e293b;
+            border-radius: 9999px;
+            height: 6px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+            transition: transform 0.15s ease;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        canvas {
+            image-rendering: -webkit-optimize-contrast;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-6 md:p-8">
+
+    <div id="pwaProtocolNotice" class="hidden max-w-4xl mx-auto w-full mb-4 rounded-xl border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-xs text-amber-200" role="status">
+        Offline app caching needs HTTPS. This page is using plain HTTP from another device; open it through an HTTPS address, then launch it once online before using it offline.
+    </div>
+
+    <!-- Header -->
+    <header class="max-w-4xl mx-auto w-full flex items-center justify-between border-b border-slate-800/80 pb-5 mb-6">
+        <div class="flex items-center gap-3">
+            <div class="bg-sky-500/10 text-sky-400 p-2.5 rounded-2xl border border-sky-500/20">
+                <i data-lucide="waves" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg sm:text-xl text-white tracking-tight">Audio Stutter Engine</h1>
+                <p class="text-xs text-slate-400">Precision WebAudio Stutter & Freeze Workstation</p>
+            </div>
+        </div>
+
+        <div class="header-tools">
+            <div id="statusIndicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono bg-slate-900 text-slate-400 border border-slate-800">
+                <span class="w-2 h-2 rounded-full bg-slate-600" id="statusDot"></span>
+                <span id="statusText">NO AUDIO LOADED</span>
+            </div>
+            <button id="pwaInstallBtn" type="button" class="hidden bg-sky-500 hover:bg-sky-400 text-slate-950 border border-sky-400/50 rounded-lg px-3 py-1.5 text-xs font-bold" aria-label="Install Audio Corruption">Install</button>
+            <button id="keyHelpBtn" type="button" aria-label="Show keyboard shortcuts" aria-expanded="false" class="key-help-button">?</button>
+            <div id="keyHelpPanel" class="key-help-panel" role="dialog" aria-label="Keyboard shortcuts" hidden>
+                <div class="key-help-title">Keyboard shortcuts</div>
+                <div class="key-help-section-title">Playback</div>
+                <div class="key-help-row"><kbd>K</kbd><span>Play / pause audio</span></div>
+                <div class="key-help-row"><kbd>J</kbd><span>Seek back 5 seconds</span></div>
+                <div class="key-help-row"><kbd>L</kbd><span>Seek forward 5 seconds</span></div>
+                <div class="key-help-section-title">Stereo Mute</div>
+                <div class="key-help-row"><kbd>Z</kbd><span>Toggle left channel mute</span></div>
+                <div class="key-help-row"><kbd>C</kbd><span>Toggle right channel mute</span></div>
+                <div class="key-help-row"><kbd>X</kbd><span>Toggle mute all</span></div>
+                <div class="key-help-section-title">Effects</div>
+                <div class="key-help-row"><kbd>V</kbd><span>Trigger Quiet Sound + pop</span></div>
+                <div class="key-help-row"><kbd>Space</kbd><span>Hold to freeze</span></div>
+                <div class="key-help-row"><kbd>M</kbd><span>Hold to stutter</span></div>
+                <div class="key-help-row"><kbd>N</kbd><span>Hold both effects</span></div>
+                <div class="key-help-section-title">Help</div>
+                <div class="key-help-row"><kbd>?</kbd><span>Show this shortcut guide</span></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-4xl mx-auto w-full flex-1 flex flex-col gap-6">
+
+        <!-- Visualizer & Timeline -->
+        <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-5 shadow-2xl backdrop-blur-md flex flex-col gap-4">
+            
+            <div class="relative w-full h-40 sm:h-48 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800/80">
+                <canvas id="waveformCanvas" class="w-full h-full block"></canvas>
+                <div id="canvasOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 text-slate-400 text-sm gap-3">
+                    <div class="p-3 bg-slate-900 rounded-full border border-slate-800 text-sky-400">
+                        <i data-lucide="music" class="w-6 h-6"></i>
+                    </div>
+                    <span id="overlayText" class="text-xs font-medium text-slate-400">Select an audio file to begin</span>
+                </div>
+            </div>
+
+            <!-- Seek Slider & Timestamps -->
+            <div class="flex flex-col gap-1.5 px-1">
+                <div class="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span id="currentTimeText">00:00</span>
+                    <span id="totalTimeText">00:00</span>
+                </div>
+                <input type="range" id="seekSlider" min="0" max="100" value="0" step="0.001" disabled class="w-full cursor-pointer accent-sky-400">
+            </div>
+
+            <!-- Playback Controls & Native File Picker -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800/80">
+                <div class="flex items-center gap-2">
+                    <button id="playBtn" disabled class="bg-sky-500 hover:bg-sky-400 text-slate-950 p-3 rounded-2xl transition-all shadow-lg shadow-sky-500/10 disabled:opacity-30 disabled:cursor-not-allowed border-0">
+                        <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                    </button>
+                    <button id="stopBtn" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-300 p-3 rounded-2xl transition border border-slate-700/80 disabled:opacity-30 disabled:cursor-not-allowed">
+                        <i data-lucide="square" class="w-5 h-5 fill-current"></i>
+                    </button>
+                    <button id="loopBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-400 p-3 rounded-2xl transition border border-slate-700/80" title="Toggle Loop">
+                        <i data-lucide="repeat" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Stereo output mute controls">
+                    <button id="muteAllBtn" type="button" aria-pressed="false" class="bg-slate-800 border border-slate-700 text-slate-300 rounded-xl py-2 px-3 text-xs font-semibold transition">Mute All</button>
+                    <button id="muteLeftBtn" type="button" aria-pressed="false" class="bg-slate-800 border border-slate-700 text-slate-300 rounded-xl py-2 px-3 text-xs font-semibold transition">Mute Left</button>
+                    <button id="muteRightBtn" type="button" aria-pressed="false" class="bg-slate-800 border border-slate-700 text-slate-300 rounded-xl py-2 px-3 text-xs font-semibold transition">Mute Right</button>
+                </div>
+
+                <!-- Native Audio File Picker (iOS Compatible) -->
+                <div class="flex flex-wrap gap-2">
+                    <input type="file" id="audioFileInput" accept="audio/*" class="hidden">
+                    <button id="uploadBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 px-4 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4 text-sky-400"></i>
+                        <span>Choose Audio File</span>
+                    </button>
+                    <button id="micRecordBtn" type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 px-4 py-2.5 rounded-2xl text-sm font-semibold transition flex items-center gap-2">
+                        <i data-lucide="mic" class="w-4 h-4 text-rose-400"></i>
+                        <span id="micRecordDot" class="hidden w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true"></span>
+                        <span id="micRecordLabel">Mic Recording</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Export controls, placed directly below the player for quick mobile access -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Live Performance Recorder -->
+                        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col justify-between gap-3">
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-xs text-slate-300">Export Performance</span>
+                                <span id="recTimer" class="font-mono text-xs text-slate-500">00:00</span>
+                            </div>
+                            <span class="text-[10px] text-slate-500">Recording starts after a 3-second countdown.</span>
+                            <audio id="recordingPreview" controls preload="none" class="hidden w-full" aria-label="Recorded performance preview"></audio>
+                            
+                            <div class="flex items-center gap-2">
+                                <button id="recBtn" disabled class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 py-2.5 px-3 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span id="recDot" class="w-2 h-2 rounded-full bg-red-500"></span>
+                                    <span id="recBtnText">Record</span>
+                                </button>
+            
+                                <a id="downloadLink" class="hidden bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                    <span>Export</span>
+                                </a>
+                            </div>
+                        </div>
+
+            <!-- Random Corruption Export -->
+                        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-semibold text-slate-300">Corruption Export</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-1.5" role="group" aria-label="Corruption type to inject">
+                                <button type="button" data-random-mode="freeze" aria-pressed="false" class="randomModeBtn bg-slate-800 border border-slate-700 text-slate-400 rounded-lg py-1.5 text-[10px] font-semibold">Inject Freeze</button>
+                                <button type="button" data-random-mode="stutter" aria-pressed="true" class="randomModeBtn bg-sky-500/20 border border-sky-500/50 text-sky-300 rounded-lg py-1.5 text-[10px] font-semibold">Inject Stutter</button>
+                                <button type="button" data-random-mode="both" aria-pressed="false" class="randomModeBtn bg-slate-800 border border-slate-700 text-slate-400 rounded-lg py-1.5 text-[10px] font-semibold">Inject Both</button>
+                                <button type="button" data-random-mode="mute" aria-pressed="false" class="randomModeBtn bg-slate-800 border border-slate-700 text-slate-400 rounded-lg py-1.5 text-[10px] font-semibold">Inject Mute</button>
+                                <button type="button" data-random-mode="everything" aria-pressed="false" class="randomModeBtn bg-red-950/40 border border-red-800/70 text-red-300 rounded-lg py-1.5 text-[10px] font-bold">Inject Everything</button>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="font-semibold text-slate-300">Intense · injection chance</span>
+                                <span id="randomIntensityVal" class="font-mono text-sky-400 font-bold">50%</span>
+                            </div>
+                            <input type="range" id="randomIntensitySlider" min="1" max="100" value="50" step="1" class="w-full" aria-label="Random corruption injection chance">
+                            <span class="text-[10px] text-slate-500">Choose the effect; Intense sets its random injection chance. Heavy damage may cause voltage creaks at 70–75%; at 80%+, a rare pop may precede permanent channel loss.</span>
+                            <button id="randomExportBtn" disabled class="bg-violet-500 hover:bg-violet-400 text-slate-950 rounded-xl py-2 px-3 font-bold text-[11px] disabled:opacity-30 disabled:cursor-not-allowed">Random Corrupt &amp; Export</button>
+                            <a id="randomDownloadLink" class="hidden bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-2 rounded-xl font-bold text-xs transition items-center justify-center gap-1.5">
+                                <i data-lucide="download" class="w-4 h-4"></i><span>Download Random MP3</span>
+                            </a>
+                        </div>
+        </div>
+
+        <!-- Freeze Button & Continue On Toggle Switch -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Hold to Freeze Button -->
+            <button id="freezeBtn" disabled tabindex="-1" class="group bg-slate-900 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/40 p-6 rounded-3xl transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                <div id="freezeIconBg" class="p-3 rounded-2xl bg-slate-800 text-slate-400 group-hover:text-sky-400 transition">
+                    <i data-lucide="pause-circle" class="w-8 h-8"></i>
+                </div>
+                <span id="freezeBtnLabel" class="font-bold text-sm text-slate-200 tracking-wide uppercase">Hold to Freeze</span>
+                <span id="freezeSubText" class="text-[11px] text-slate-500">Timeline pauses during freeze (or press Spacebar)</span>
+            </button>
+
+            <!-- Hold Both Effects -->
+            <button id="bothBtn" disabled tabindex="-1" class="group bg-slate-900 hover:bg-slate-800/80 border border-slate-800 hover:border-violet-500/40 p-6 rounded-3xl transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                <div id="bothIconBg" class="p-3 rounded-2xl bg-slate-800 text-slate-400 group-hover:text-violet-400 transition">
+                    <i data-lucide="layers" class="w-8 h-8"></i>
+                </div>
+                <span id="bothBtnLabel" class="font-bold text-sm text-slate-200 tracking-wide uppercase">Hold Both</span>
+                <span class="text-[11px] text-slate-500">Freeze + Stutter</span>
+            </button>
+
+            <!-- Dedicated Hold to Stutter Button -->
+            <button id="stutterBtn" disabled tabindex="-1" class="group bg-slate-900 hover:bg-slate-800/80 border border-slate-800 hover:border-fuchsia-500/40 p-6 rounded-3xl transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                <div id="stutterIconBg" class="p-3 rounded-2xl bg-slate-800 text-slate-400 group-hover:text-fuchsia-400 transition">
+                    <i data-lucide="audio-lines" class="w-8 h-8"></i>
+                </div>
+                <span id="stutterBtnLabel" class="font-bold text-sm text-slate-200 tracking-wide uppercase">Hold to Stutter</span>
+                <span class="text-[11px] text-slate-500">Slow, repeating audio (hold M)</span>
+            </button>
+
+            <!-- Continue On Toggle Switch Panel -->
+            <div class="bg-slate-900/60 border border-slate-800 p-4 lg:p-5 rounded-3xl flex flex-col justify-between gap-4 min-w-0">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="fast-forward" class="w-4 h-4 text-sky-400"></i>
+                        <span class="font-bold text-sm text-slate-200 whitespace-nowrap">Continue On</span>
+                    </div>
+                    <!-- Toggle Switch -->
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="continueToggle" class="sr-only peer" tabindex="-1">
+                        <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+                    </label>
+                </div>
+
+                <div class="text-xs text-slate-400 leading-relaxed">
+                    <p id="toggleDesc">
+                        <strong class="text-slate-300">OFF:</strong> Audio pauses during freeze and resumes from freeze point.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- DSP Controls & Performance Recorder -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Buffer Size Control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Stutter Buffering</span>
+                    <span id="bufferVal" class="font-mono text-sky-400 font-bold">45 ms</span>
+                </div>
+                <input type="range" id="bufferSlider" min="5" max="200" value="45" step="1" class="w-full">
+            </div>
+
+            <!-- Freeze Pitch Control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Freeze Pitch / Rate</span>
+                    <span id="pitchVal" class="font-mono text-sky-400 font-bold">1.00x</span>
+                </div>
+                <input type="range" id="pitchSlider" min="0.25" max="2.0" value="1.0" step="0.05" class="w-full" aria-label="Freeze pitch and playback rate">
+            </div>
+
+            <!-- Pitch-Preserving Stutter Timing Control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Stutter Intensity</span>
+                    <span id="stutterSpeedVal" class="font-mono text-sky-400 font-bold">50%</span>
+                </div>
+                <input type="range" id="stutterSpeedSlider" min="0" max="100" value="50" step="1" class="w-full" aria-label="Stutter intensity">
+                <span class="text-[10px] text-slate-500">Higher intensity repeats shorter audio slices for a more robotic stutter, without pitch shift.</span>
+            </div>
+
+            <!-- Live bit-depth control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Bits</span>
+                    <span id="bitsVal" class="font-mono text-sky-400 font-bold">64 bits</span>
+                </div>
+                <input type="range" id="bitsSlider" min="0" max="4" value="4" step="1" class="w-full" aria-label="Audio bit depth">
+                <span class="text-[10px] text-slate-500">Choose 1, 8, 16, 32, or 64 bits. Higher settings keep a subtle retro texture with less grit.</span>
+            </div>
+
+            <!-- Audio Lag Control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Audio Lag</span>
+                    <span id="lagVal" class="font-mono text-sky-400 font-bold">0%</span>
+                </div>
+                <input type="range" id="lagSlider" min="0" max="100" value="0" step="1" class="w-full" aria-label="Audio lag intensity">
+                <span class="text-[10px] text-slate-500">0% is clean; higher levels add more frequent, longer random dropouts.</span>
+            </div>
+
+            <!-- Live voltage creak control -->
+            <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="font-semibold text-slate-300">Voltage Creak</span>
+                    <span id="voltageCreakVal" class="font-mono text-sky-400 font-bold">0%</span>
+                </div>
+                <input type="range" id="voltageCreakSlider" min="0" max="100" value="0" step="1" class="w-full" aria-label="Live voltage creak volume">
+                <button id="quietSoundBtn" type="button" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 py-2 px-3 rounded-xl font-semibold text-xs disabled:opacity-30 disabled:cursor-not-allowed">Quiet Sound</button>
+                <span class="text-[10px] text-slate-500">Press during playback for a recoverable volume dip and creak. Slider controls creak volume; 0% turns creaks off.</span>
+            </div>
+
+    
+
+
+
+        </div>
+
+    </main>
+
+    <footer class="max-w-4xl mx-auto w-full text-center text-xs text-slate-600 pt-8 pb-2">
+        Audio Stutter Studio &bull; Web Audio API
+        <br>This is meant for a prank. No harmful content, just audio effects to inject.
+    </footer>
+
+    <!-- Audio Engine & Control Script -->
+    <script>
+        // WebAudio Nodes & Audio State
+        let audioCtx = null;
+        let audioBuffer = null;
+        let sourceNode = null;
+        let mainGainNode = null;
+        let outputMixGainNode = null;
+        let bitCrusherNode = null;
+        let bitCrusherConnected = false;
+        let channelSplitterNode = null;
+        let channelMergerNode = null;
+        let leftChannelGainNode = null;
+        let rightChannelGainNode = null;
+        let masterMuteGainNode = null;
+        let analyzerNode = null;
+        let micAnalyzerNode = null;
+        let micVisualizerSourceNode = null;
+        let visualizerStarted = false;
+        let currentFileBaseName = 'audio';
+
+        // Recorder State
+        let mediaStreamDest = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recStartTime = 0;
+        let recTimerInterval = null;
+        let recCountdownInterval = null;
+        let isCountingDown = false;
+        let performancePreviewUrl = null;
+        let randomExportMode = 'stutter';
+        let micStream = null;
+        let micRecorder = null;
+        let micRecordedChunks = [];
+        let isMicRecording = false;
+        let isMicCountingDown = false;
+        let micCountdownInterval = null;
+        let isMuted = false;
+        let isLeftMuted = false;
+        let isRightMuted = false;
+
+        // Playback Position State
+        let isPlaying = false;
+        let isFrozen = false;
+        let isStuttering = false;
+        let isLooping = false;
+        let stutterInterval = null;
+        let stutterPulseOn = true;
+        let stutterBufferSources = [];
+        let stutterOutputGainNode = null;
+        let stutterSchedulerTimeout = null;
+        let stutterAdvanceTimeouts = [];
+        let stutterPositionSec = 0;
+        let stutterScheduleOffsetSec = 0;
+        let stutterNextWhen = 0;
+        let lagScheduleTimeout = null;
+        let lagReleaseTimeout = null;
+        let lagCutActive = false;
+        let voltageGainNode = null;
+        let liveCreakTimeout = null;
+        let liveCreakSourceNode = null;
+        let liveCreakEffectGainNode = null;
+
+        let trackStartTime = 0;   // Context time offset reference when playing
+        let pauseOffset = 0;      // Song position in seconds when paused/stopped
+        let freezeStartOffset = 0;// Captured position when freeze starts
+
+        let freezeBufferSource = null;
+        let freezeOutputGainNode = null;
+
+        // UI References
+        const uploadBtn = document.getElementById('uploadBtn');
+        const micRecordBtn = document.getElementById('micRecordBtn');
+        const micRecordDot = document.getElementById('micRecordDot');
+        const micRecordLabel = document.getElementById('micRecordLabel');
+        const audioFileInput = document.getElementById('audioFileInput');
+        const playBtn = document.getElementById('playBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const loopBtn = document.getElementById('loopBtn');
+        const seekSlider = document.getElementById('seekSlider');
+        const muteAllBtn = document.getElementById('muteAllBtn');
+        const muteLeftBtn = document.getElementById('muteLeftBtn');
+        const muteRightBtn = document.getElementById('muteRightBtn');
+        
+        const freezeBtn = document.getElementById('freezeBtn');
+        const stutterBtn = document.getElementById('stutterBtn');
+        const stutterIconBg = document.getElementById('stutterIconBg');
+        const stutterBtnLabel = document.getElementById('stutterBtnLabel');
+        const bothBtn = document.getElementById('bothBtn');
+        const bothIconBg = document.getElementById('bothIconBg');
+        const bothBtnLabel = document.getElementById('bothBtnLabel');
+        const freezeBtnLabel = document.getElementById('freezeBtnLabel');
+        const freezeSubText = document.getElementById('freezeSubText');
+        const freezeIconBg = document.getElementById('freezeIconBg');
+        const continueToggle = document.getElementById('continueToggle');
+        const toggleDesc = document.getElementById('toggleDesc');
+
+        const bufferSlider = document.getElementById('bufferSlider');
+        const bufferVal = document.getElementById('bufferVal');
+        const pitchSlider = document.getElementById('pitchSlider');
+        const pitchVal = document.getElementById('pitchVal');
+        const stutterSpeedSlider = document.getElementById('stutterSpeedSlider');
+        const stutterSpeedVal = document.getElementById('stutterSpeedVal');
+        const bitsSlider = document.getElementById('bitsSlider');
+        const bitsVal = document.getElementById('bitsVal');
+        const BIT_DEPTH_OPTIONS = [1, 8, 16, 32, 64];
+        const getSelectedBitDepth = () => BIT_DEPTH_OPTIONS[parseInt(bitsSlider.value, 10)] || 64;
+        const lagSlider = document.getElementById('lagSlider');
+        const lagVal = document.getElementById('lagVal');
+        const voltageCreakSlider = document.getElementById('voltageCreakSlider');
+        const voltageCreakVal = document.getElementById('voltageCreakVal');
+        const quietSoundBtn = document.getElementById('quietSoundBtn');
+
+        const recBtn = document.getElementById('recBtn');
+        const recBtnText = document.getElementById('recBtnText');
+        const recDot = document.getElementById('recDot');
+        const recTimer = document.getElementById('recTimer');
+        const recordingPreview = document.getElementById('recordingPreview');
+        const downloadLink = document.getElementById('downloadLink');
+        const randomExportBtn = document.getElementById('randomExportBtn');
+        const randomDownloadLink = document.getElementById('randomDownloadLink');
+        const randomIntensitySlider = document.getElementById('randomIntensitySlider');
+        const randomIntensityVal = document.getElementById('randomIntensityVal');
+
+        const currentTimeText = document.getElementById('currentTimeText');
+        const totalTimeText = document.getElementById('totalTimeText');
+        const statusText = document.getElementById('statusText');
+        const statusDot = document.getElementById('statusDot');
+        const canvasOverlay = document.getElementById('canvasOverlay');
+        const overlayText = document.getElementById('overlayText');
+
+        const canvas = document.getElementById('waveformCanvas');
+        const canvasCtx = canvas.getContext('2d');
+
+        // Render Lucide Icons
+        lucide.createIcons();
+
+        // Prevent button focus retaining focus ring or spacebar click duplicates
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('focus', () => {
+                if (document.activeElement) document.activeElement.blur();
+            });
+        });
+
+        // Initialize WebAudio Context cleanly
+        function initAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+
+                mainGainNode = audioCtx.createGain();
+                analyzerNode = audioCtx.createAnalyser();
+                analyzerNode.fftSize = 1024;
+
+                outputMixGainNode = audioCtx.createGain();
+                outputMixGainNode.channelCount = 2;
+                outputMixGainNode.channelCountMode = 'explicit';
+                outputMixGainNode.channelInterpretation = 'speakers';
+                bitCrusherNode = audioCtx.createScriptProcessor(4096, 2, 2);
+                bitCrusherNode.onaudioprocess = (event) => {
+                    const bitDepth = getSelectedBitDepth();
+                    // Higher selections retain a subtle sample-rate reduction so the retro
+                    // character remains audible even when the quantization itself is clean.
+                    const heldSamples = [16, 8, 4, 4, 2][parseInt(bitsSlider.value, 10)] || 1;
+                    const input = event.inputBuffer;
+                    const output = event.outputBuffer;
+                    const channelCount = Math.min(input.numberOfChannels, output.numberOfChannels);
+                    for (let channel = 0; channel < channelCount; channel++) {
+                        const inputData = input.getChannelData(channel);
+                        const outputData = output.getChannelData(channel);
+                        if (bitDepth === 1) {
+                            for (let i = 0; i < inputData.length; i++) {
+                                const sample = inputData[Math.floor(i / heldSamples) * heldSamples] || 0;
+                                outputData[i] = Math.abs(sample) < 0.015 ? 0 : (sample > 0 ? 1 : -1);
+                            }
+                            continue;
+                        }
+                        const quantizationLevels = Math.pow(2, Math.min(bitDepth, 16) - 1) - 1;
+                        for (let i = 0; i < inputData.length; i++) {
+                            const sample = inputData[Math.floor(i / heldSamples) * heldSamples] || 0;
+                            outputData[i] = Math.max(-1, Math.min(1,
+                                Math.round(sample * quantizationLevels) / quantizationLevels
+                            ));
+                        }
+                    }
+                    for (let channel = channelCount; channel < output.numberOfChannels; channel++) {
+                        output.getChannelData(channel).fill(0);
+                    }
+                };
+                voltageGainNode = audioCtx.createGain();
+                channelSplitterNode = audioCtx.createChannelSplitter(2);
+                channelMergerNode = audioCtx.createChannelMerger(2);
+                leftChannelGainNode = audioCtx.createGain();
+                rightChannelGainNode = audioCtx.createGain();
+                masterMuteGainNode = audioCtx.createGain();
+
+                mediaStreamDest = audioCtx.createMediaStreamDestination();
+
+                mainGainNode.connect(outputMixGainNode);
+                outputMixGainNode.connect(voltageGainNode);
+                voltageGainNode.connect(channelSplitterNode);
+                channelSplitterNode.connect(leftChannelGainNode, 0);
+                channelSplitterNode.connect(rightChannelGainNode, 1);
+                leftChannelGainNode.connect(channelMergerNode, 0, 0);
+                rightChannelGainNode.connect(channelMergerNode, 0, 1);
+                channelMergerNode.connect(masterMuteGainNode);
+                masterMuteGainNode.connect(analyzerNode);
+                analyzerNode.connect(audioCtx.destination);
+                analyzerNode.connect(mediaStreamDest);
+                updateBitCrusherRouting();
+                applyOutputMutes();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function applyOutputMutes() {
+            if (masterMuteGainNode && audioCtx) {
+                masterMuteGainNode.gain.setValueAtTime(isMuted ? 0 : 1, audioCtx.currentTime);
+                leftChannelGainNode.gain.setValueAtTime(isLeftMuted ? 0 : 1, audioCtx.currentTime);
+                rightChannelGainNode.gain.setValueAtTime(isRightMuted ? 0 : 1, audioCtx.currentTime);
+            }
+            [
+                [muteAllBtn, isMuted],
+                [muteLeftBtn, isLeftMuted],
+                [muteRightBtn, isRightMuted]
+            ].forEach(([button, active]) => {
+                button.setAttribute('aria-pressed', String(active));
+                button.classList.toggle('bg-slate-800', !active);
+                button.classList.toggle('border-slate-700', !active);
+                button.classList.toggle('text-slate-300', !active);
+                button.classList.toggle('bg-red-950/40', active);
+                button.classList.toggle('border-red-800/70', active);
+                button.classList.toggle('text-red-300', active);
+            });
+        }
+
+        function updateBitCrusherRouting() {
+            if (!outputMixGainNode || !bitCrusherNode || !voltageGainNode) return;
+            const shouldConnectCrusher = true;
+            if (shouldConnectCrusher === bitCrusherConnected) return;
+
+            outputMixGainNode.disconnect();
+            bitCrusherNode.disconnect();
+            if (shouldConnectCrusher) {
+                outputMixGainNode.connect(bitCrusherNode);
+                bitCrusherNode.connect(voltageGainNode);
+            } else {
+                outputMixGainNode.connect(voltageGainNode);
+            }
+            bitCrusherConnected = shouldConnectCrusher;
+        }
+
+        function connectMicVisualizer(stream) {
+            if (micVisualizerSourceNode) {
+                try { micVisualizerSourceNode.disconnect(); } catch (err) {}
+            }
+            micAnalyzerNode = audioCtx.createAnalyser();
+            micAnalyzerNode.fftSize = 1024;
+            micVisualizerSourceNode = audioCtx.createMediaStreamSource(stream);
+            micVisualizerSourceNode.connect(micAnalyzerNode);
+        }
+
+        function disconnectMicVisualizer() {
+            if (micVisualizerSourceNode) {
+                try { micVisualizerSourceNode.disconnect(); } catch (err) {}
+                micVisualizerSourceNode = null;
+            }
+            micAnalyzerNode = null;
+        }
+
+        function setMicRecordingIndicator(active) {
+            micRecordDot.classList.toggle('hidden', !active);
+        }
+
+        const CONFIG_STORAGE_KEY = 'audioStutterStudioConfig';
+        const CONFIG_RANGE_IDS = [
+            'bufferSlider', 'pitchSlider', 'stutterSpeedSlider', 'bitsSlider',
+            'lagSlider', 'voltageCreakSlider', 'randomIntensitySlider'
+        ];
+
+        function saveConfigSettings() {
+            try {
+                localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
+                    bufferMs: bufferSlider.value,
+                    freezePitch: pitchSlider.value,
+                    stutterIntensity: stutterSpeedSlider.value,
+                    bits: bitsSlider.value,
+                    lag: lagSlider.value,
+                    voltageCreak: voltageCreakSlider.value,
+                    randomIntensity: randomIntensitySlider.value,
+                    continueOn: continueToggle.checked,
+                    looping: isLooping,
+                    muted: isMuted,
+                    leftMuted: isLeftMuted,
+                    rightMuted: isRightMuted,
+                    randomMode: randomExportMode
+                }));
+            } catch (err) {
+                // Local storage may be unavailable for private or local-file sessions.
+            }
+        }
+
+        function updateRandomModeButtons() {
+            document.querySelectorAll('.randomModeBtn').forEach((option) => {
+                const selected = option.dataset.randomMode === randomExportMode;
+                const isEverythingOption = option.dataset.randomMode === 'everything';
+                const everythingSelected = selected && isEverythingOption;
+                option.setAttribute('aria-pressed', String(selected));
+                option.classList.toggle('bg-sky-500/20', selected && !everythingSelected);
+                option.classList.toggle('border-sky-500/50', selected && !everythingSelected);
+                option.classList.toggle('text-sky-300', selected && !everythingSelected);
+                option.classList.toggle('bg-red-500/25', everythingSelected);
+                option.classList.toggle('border-red-500', everythingSelected);
+                option.classList.toggle('text-red-200', everythingSelected);
+                option.classList.toggle('bg-red-950/40', !selected && isEverythingOption);
+                option.classList.toggle('border-red-800/70', !selected && isEverythingOption);
+                option.classList.toggle('text-red-300', !selected && isEverythingOption);
+                option.classList.toggle('bg-slate-800', !selected && !isEverythingOption);
+                option.classList.toggle('border-slate-700', !selected && !isEverythingOption);
+                option.classList.toggle('text-slate-400', !selected && !isEverythingOption);
+            });
+        }
+
+        function restoreConfigSettings() {
+            let saved = null;
+            try {
+                saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || 'null');
+            } catch (err) {
+                saved = null;
+            }
+            if (saved && typeof saved === 'object') {
+                const ranges = {
+                    bufferSlider: saved.bufferMs,
+                    pitchSlider: saved.freezePitch,
+                    stutterSpeedSlider: saved.stutterIntensity,
+                    bitsSlider: saved.bits,
+                    lagSlider: saved.lag,
+                    voltageCreakSlider: saved.voltageCreak,
+                    randomIntensitySlider: saved.randomIntensity
+                };
+                Object.keys(ranges).forEach((id) => {
+                    const control = document.getElementById(id);
+                    let value = Number(ranges[id]);
+                    if (Number.isFinite(value)) {
+                        if (id === 'bitsSlider') {
+                            // Configs from older versions stored bit depth (1–64), not the option index.
+                            const exactOptionIndex = BIT_DEPTH_OPTIONS.indexOf(value);
+                            value = exactOptionIndex >= 0 ? exactOptionIndex : BIT_DEPTH_OPTIONS.reduce((best, option, index) =>
+                                Math.abs(option - value) < Math.abs(BIT_DEPTH_OPTIONS[best] - value) ? index : best, 0);
+                        }
+                        control.value = String(Math.max(Number(control.min), Math.min(Number(control.max), value)));
+                    }
+                });
+                if (typeof saved.continueOn === 'boolean') continueToggle.checked = saved.continueOn;
+                if (typeof saved.looping === 'boolean') isLooping = saved.looping;
+                if (typeof saved.muted === 'boolean') isMuted = saved.muted;
+                if (typeof saved.leftMuted === 'boolean') isLeftMuted = saved.leftMuted;
+                if (typeof saved.rightMuted === 'boolean') isRightMuted = saved.rightMuted;
+                if (['freeze', 'stutter', 'both', 'mute', 'everything'].includes(saved.randomMode)) {
+                    randomExportMode = saved.randomMode;
+                }
+            }
+
+            bufferVal.innerText = `${bufferSlider.value} ms`;
+            pitchVal.innerText = `${parseFloat(pitchSlider.value).toFixed(2)}x`;
+            stutterSpeedVal.innerText = `${stutterSpeedSlider.value}%`;
+            bitsVal.innerText = `${getSelectedBitDepth()} ${getSelectedBitDepth() === 1 ? 'bit' : 'bits'}`;
+            lagVal.innerText = `${lagSlider.value}%`;
+            voltageCreakVal.innerText = `${voltageCreakSlider.value}%`;
+            randomIntensityVal.innerText = `${randomIntensitySlider.value}%`;
+            if (continueToggle.checked) {
+                freezeSubText.innerText = 'Timeline advances in background (skips forward on release)';
+                toggleDesc.innerHTML = '<strong class="text-sky-400">ON:</strong> Song advances in background; catches up when released.';
+            } else {
+                freezeSubText.innerText = 'Timeline pauses during freeze (or press Spacebar)';
+                toggleDesc.innerHTML = '<strong class="text-slate-300">OFF:</strong> Audio pauses during freeze and resumes from freeze point.';
+            }
+            loopBtn.classList.toggle('text-sky-400', isLooping);
+            loopBtn.classList.toggle('border-sky-500/50', isLooping);
+            updateRandomModeButtons();
+
+            CONFIG_RANGE_IDS.forEach((id) => {
+                document.getElementById(id).addEventListener('input', saveConfigSettings);
+            });
+        }
+
+        function toggleMuteAll() {
+            isMuted = !isMuted;
+            applyOutputMutes();
+            saveConfigSettings();
+        }
+
+        function toggleMuteLeft() {
+            isLeftMuted = !isLeftMuted;
+            applyOutputMutes();
+            saveConfigSettings();
+        }
+
+        function toggleMuteRight() {
+            isRightMuted = !isRightMuted;
+            applyOutputMutes();
+            saveConfigSettings();
+        }
+
+        restoreConfigSettings();
+
+        // Native iOS File Upload Listener
+        uploadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            initAudioContext();
+            audioFileInput.click();
+        });
+
+        audioFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            currentFileBaseName = file.name.replace(/\.[^.]+$/, '').trim() || 'audio';
+
+            initAudioContext();
+            const reader = new FileReader();
+            
+            canvasOverlay.classList.remove('hidden');
+            overlayText.innerText = 'Decoding audio file...';
+
+            reader.onload = function(evt) {
+                audioCtx.decodeAudioData(evt.target.result)
+                    .then((decodedBuffer) => {
+                        audioBuffer = decodedBuffer;
+                        onAudioLoaded();
+                    })
+                    .catch(() => {
+                        overlayText.innerText = 'Error decoding audio file';
+                    });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        micRecordBtn.addEventListener('click', async () => {
+            if (isMicCountingDown) {
+                clearInterval(micCountdownInterval);
+                micCountdownInterval = null;
+                isMicCountingDown = false;
+                micRecorder = null;
+                micRecordedChunks = [];
+                if (micStream) micStream.getTracks().forEach((track) => { track.enabled = false; });
+                disconnectMicVisualizer();
+                setMicRecordingIndicator(false);
+                if (!audioBuffer) canvasOverlay.classList.remove('hidden');
+                micRecordBtn.classList.remove('border-rose-500', 'bg-rose-500/10');
+                micRecordLabel.innerText = 'Mic Recording';
+                return;
+            }
+
+            if (isMicRecording) {
+                micRecorder.stop();
+                isMicRecording = false;
+                setMicRecordingIndicator(false);
+                micRecordBtn.disabled = true;
+                micRecordLabel.innerText = 'Importing Recording…';
+                return;
+            }
+
+            if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+                alert('Microphone recording is not supported in this browser.');
+                return;
+            }
+
+            try {
+                const liveMicTrack = micStream && micStream.getAudioTracks().find((track) => track.readyState === 'live');
+                if (!liveMicTrack) {
+                    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+                micStream.getTracks().forEach((track) => { track.enabled = true; });
+                initAudioContext();
+                connectMicVisualizer(micStream);
+                micRecordedChunks = [];
+                const supportedMicType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+                    .find((type) => MediaRecorder.isTypeSupported(type));
+                micRecorder = new MediaRecorder(micStream, supportedMicType ? { mimeType: supportedMicType } : undefined);
+                micRecorder.addEventListener('dataavailable', (event) => {
+                    if (event.data.size > 0) micRecordedChunks.push(event.data);
+                });
+                micRecorder.addEventListener('stop', async () => {
+                    isMicRecording = false;
+                    setMicRecordingIndicator(false);
+                    disconnectMicVisualizer();
+                    if (micStream) micStream.getTracks().forEach((track) => { track.enabled = false; });
+                    try {
+                        initAudioContext();
+                        const micBlob = new Blob(micRecordedChunks, { type: micRecorder.mimeType || 'audio/webm' });
+                        const decodedMic = await audioCtx.decodeAudioData(await micBlob.arrayBuffer());
+                        audioBuffer = decodedMic;
+                        currentFileBaseName = 'Mic Recording';
+                        audioFileInput.value = '';
+                        onAudioLoaded();
+                    } catch (error) {
+                        if (!audioBuffer) canvasOverlay.classList.remove('hidden');
+                        alert('Could not import the microphone recording. Try recording again.');
+                    } finally {
+                        micRecorder = null;
+                        isMicRecording = false;
+                        micRecordedChunks = [];
+                        micRecordBtn.disabled = false;
+                        micRecordBtn.classList.remove('border-rose-500', 'bg-rose-500/10');
+                        micRecordLabel.innerText = 'Mic Recording';
+                    }
+                }, { once: true });
+
+                isMicCountingDown = true;
+                let count = 3;
+                micRecordBtn.classList.add('border-rose-500', 'bg-rose-500/10');
+                micRecordLabel.innerText = `Get Ready · ${count}`;
+                micCountdownInterval = setInterval(() => {
+                    count -= 1;
+                    if (count > 0) {
+                        micRecordLabel.innerText = `Get Ready · ${count}`;
+                        return;
+                    }
+                    clearInterval(micCountdownInterval);
+                    micCountdownInterval = null;
+                    isMicCountingDown = false;
+                    try {
+                        micRecorder.start();
+                        isMicRecording = true;
+                        setMicRecordingIndicator(true);
+                        canvasOverlay.classList.add('hidden');
+                        startVisualizer();
+                        micRecordLabel.innerText = 'Stop & Import';
+                    } catch (error) {
+                        if (micStream) micStream.getTracks().forEach((track) => { track.enabled = false; });
+                        disconnectMicVisualizer();
+                        setMicRecordingIndicator(false);
+                        micRecorder = null;
+                        if (!audioBuffer) canvasOverlay.classList.remove('hidden');
+                        micRecordLabel.innerText = 'Mic Recording';
+                        micRecordBtn.classList.remove('border-rose-500', 'bg-rose-500/10');
+                        alert('Could not start microphone recording. Try again.');
+                    }
+                }, 1000);
+                micRecordBtn.classList.add('border-rose-500', 'bg-rose-500/10');
+            } catch (error) {
+                if (micStream) micStream.getTracks().forEach((track) => { track.enabled = false; });
+                disconnectMicVisualizer();
+                setMicRecordingIndicator(false);
+                isMicRecording = false;
+                micRecordLabel.innerText = 'Mic Recording';
+                alert('Microphone access was unavailable. Check the browser permission and try again.');
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            if (micCountdownInterval) clearInterval(micCountdownInterval);
+            disconnectMicVisualizer();
+            if (micStream) {
+                micStream.getTracks().forEach((track) => track.stop());
+                micStream = null;
+            }
+        });
+
+        function onAudioLoaded() {
+            stopAudio();
+            pauseOffset = 0;
+
+            playBtn.disabled = false;
+            stopBtn.disabled = false;
+            freezeBtn.disabled = false;
+            stutterBtn.disabled = false;
+            bothBtn.disabled = false;
+            recBtn.disabled = false;
+            randomExportBtn.disabled = false;
+            quietSoundBtn.disabled = false;
+            seekSlider.disabled = false;
+
+            seekSlider.max = audioBuffer.duration;
+            totalTimeText.innerText = formatTime(audioBuffer.duration);
+
+            canvasOverlay.classList.add('hidden');
+            setStatus('READY', 'bg-emerald-400');
+            updateTimeDisplay();
+            startVisualizer();
+        }
+
+        // Calculate current song position accurately without reset bugs
+        function getCurrentPlaybackTime() {
+            if (!audioBuffer) return 0;
+            if (!isPlaying) return pauseOffset;
+
+            // If frozen with Continue On = OFF, lock output position to freezeStartOffset
+            if (isFrozen && !continueToggle.checked) {
+                return freezeStartOffset;
+            }
+
+            // A solo stutter repeats a short slice while the main source is paused.
+            if (isStuttering && !isFrozen) return stutterPositionSec;
+
+            const elapsed = audioCtx.currentTime - trackStartTime;
+            if (isLooping) {
+                return ((elapsed % audioBuffer.duration) + audioBuffer.duration) % audioBuffer.duration;
+            }
+            return Math.min(Math.max(0, elapsed), audioBuffer.duration);
+        }
+
+        // Start / Resume Track
+        function startAudio(offsetSec = 0) {
+            if (!audioBuffer) return;
+            initAudioContext();
+
+            if (sourceNode) {
+                try { sourceNode.stop(); sourceNode.disconnect(); } catch(err){}
+            }
+
+            pauseOffset = Math.min(Math.max(0, offsetSec), audioBuffer.duration);
+            trackStartTime = audioCtx.currentTime - pauseOffset;
+
+            sourceNode = audioCtx.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            sourceNode.loop = isLooping;
+            sourceNode.connect(mainGainNode);
+
+            sourceNode.start(0, pauseOffset);
+            mainGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+            mainGainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            mainGainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.008);
+            if (voltageGainNode) voltageGainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            isPlaying = true;
+            scheduleLagDropout();
+            scheduleLiveVoltageCreak(true);
+
+            playBtn.innerHTML = `<i data-lucide="pause" class="w-5 h-5 fill-current"></i>`;
+            lucide.createIcons();
+            setStatus('PLAYING', 'bg-sky-400');
+        }
+
+        function pauseAudio() {
+            if (!isPlaying) return;
+            stopLagSimulation();
+            stopLiveVoltageCreak();
+            stopStutter();
+            pauseOffset = getCurrentPlaybackTime();
+
+            if (sourceNode) {
+                try { sourceNode.stop(); sourceNode.disconnect(); } catch(err){}
+            }
+            if (freezeBufferSource) {
+                try { freezeBufferSource.stop(); freezeBufferSource.disconnect(); } catch(err){}
+            }
+            if (freezeOutputGainNode) {
+                try { freezeOutputGainNode.disconnect(); } catch (err) {}
+                freezeOutputGainNode = null;
+            }
+
+            isPlaying = false;
+            isFrozen = false;
+
+            playBtn.innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i>`;
+            lucide.createIcons();
+            setStatus('PAUSED', 'bg-amber-400');
+        }
+
+        function stopAudio() {
+            if (sourceNode) {
+                try { sourceNode.stop(); sourceNode.disconnect(); } catch(err){}
+            }
+            if (freezeBufferSource) {
+                try { freezeBufferSource.stop(); freezeBufferSource.disconnect(); } catch(err){}
+            }
+            if (freezeOutputGainNode) {
+                try { freezeOutputGainNode.disconnect(); } catch (err) {}
+                freezeOutputGainNode = null;
+            }
+
+            isPlaying = false;
+            isFrozen = false;
+            stopLagSimulation();
+            stopLiveVoltageCreak();
+            stopStutter();
+            stutterBtn.classList.remove('border-fuchsia-500', 'bg-fuchsia-500/10');
+            stutterIconBg.classList.remove('bg-fuchsia-500', 'text-slate-950');
+            stutterBtnLabel.innerText = 'HOLD TO STUTTER';
+            pauseOffset = 0;
+
+            playBtn.innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i>`;
+            lucide.createIcons();
+            if (audioBuffer) setStatus('READY', 'bg-emerald-400');
+            updateTimeDisplay();
+        }
+
+        function createFreezeSliceBuffer(offsetSec, lengthMs) {
+            const sampleRate = audioBuffer.sampleRate;
+            const sampleCount = Math.floor((lengthMs / 1000) * sampleRate);
+            const startSample = Math.floor(offsetSec * sampleRate);
+            const sliceBuffer = audioCtx.createBuffer(
+                audioBuffer.numberOfChannels,
+                Math.max(sampleCount, 64),
+                sampleRate
+            );
+
+            for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+                const srcData = audioBuffer.getChannelData(channel);
+                const destData = sliceBuffer.getChannelData(channel);
+                for (let i = 0; i < sampleCount; i++) {
+                    destData[i] = srcData[(startSample + i) % srcData.length];
+                }
+            }
+            return sliceBuffer;
+        }
+
+        function refreshFreezeSlice() {
+            if (!isFrozen || !freezeOutputGainNode) return;
+            if (freezeBufferSource) {
+                try { freezeBufferSource.stop(); freezeBufferSource.disconnect(); } catch (err) {}
+            }
+            freezeBufferSource = audioCtx.createBufferSource();
+            freezeBufferSource.buffer = createFreezeSliceBuffer(freezeStartOffset, parseFloat(bufferSlider.value));
+            freezeBufferSource.loop = true;
+            freezeBufferSource.playbackRate.value = parseFloat(pitchSlider.value);
+            freezeBufferSource.connect(freezeOutputGainNode);
+            freezeBufferSource.start(0);
+        }
+
+        function refreshStutterSlice() {
+            if (!isStuttering || isFrozen || !stutterOutputGainNode) return;
+            clearStutterScheduler();
+            stutterScheduleOffsetSec = stutterPositionSec;
+            stutterNextWhen = audioCtx.currentTime + 0.025;
+            scheduleStutterGroup();
+        }
+
+        function clearStutterScheduler() {
+            if (stutterSchedulerTimeout) clearTimeout(stutterSchedulerTimeout);
+            stutterSchedulerTimeout = null;
+            stutterAdvanceTimeouts.forEach(clearTimeout);
+            stutterAdvanceTimeouts = [];
+            stutterBufferSources.forEach((source) => {
+                try { source.stop(); source.disconnect(); } catch (err) {}
+            });
+            stutterBufferSources = [];
+        }
+
+        function scheduleStutterGroup() {
+            if (!isStuttering || isFrozen || !stutterOutputGainNode) return;
+            const intensity = parseFloat(stutterSpeedSlider.value) / 100;
+            const chunkSeconds = Math.max(0.012, parseFloat(bufferSlider.value) * (1 - 0.85 * intensity) / 1000);
+            // Keep the midpoint near 2x processing slowdown; reserve 3x repeats
+            // for the strongest robotic stutter setting.
+            const repeatCount = 2 + Math.floor(intensity * 1.5);
+            let offset = stutterScheduleOffsetSec;
+            if (isLooping) offset = offset % audioBuffer.duration;
+            if (offset >= audioBuffer.duration) {
+                stutterPositionSec = audioBuffer.duration;
+                pauseOffset = stutterPositionSec;
+                return;
+            }
+
+            const segmentSeconds = isLooping
+                ? chunkSeconds
+                : Math.min(chunkSeconds, audioBuffer.duration - offset);
+            const groupStart = Math.max(stutterNextWhen, audioCtx.currentTime + 0.01);
+            for (let repeat = 0; repeat < repeatCount; repeat++) {
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.loop = isLooping;
+                source.connect(stutterOutputGainNode);
+                source.onended = () => {
+                    const sourceIndex = stutterBufferSources.indexOf(source);
+                    if (sourceIndex >= 0) stutterBufferSources.splice(sourceIndex, 1);
+                    try { source.disconnect(); } catch (err) {}
+                };
+                source.start(groupStart + repeat * segmentSeconds, offset, segmentSeconds);
+                stutterBufferSources.push(source);
+            }
+
+            const groupEnd = groupStart + repeatCount * segmentSeconds;
+            const nextOffset = isLooping
+                ? (offset + segmentSeconds) % audioBuffer.duration
+                : offset + segmentSeconds;
+            stutterScheduleOffsetSec = nextOffset;
+            stutterNextWhen = groupEnd;
+
+            const advanceTimer = setTimeout(() => {
+                const timerIndex = stutterAdvanceTimeouts.indexOf(advanceTimer);
+                if (timerIndex >= 0) stutterAdvanceTimeouts.splice(timerIndex, 1);
+                if (isStuttering && !isFrozen) {
+                    stutterPositionSec = nextOffset;
+                    pauseOffset = nextOffset;
+                    updateTimeDisplay();
+                }
+            }, Math.max(0, (groupEnd - audioCtx.currentTime) * 1000));
+            stutterAdvanceTimeouts.push(advanceTimer);
+
+            const scheduleLeadMs = 35;
+            stutterSchedulerTimeout = setTimeout(
+                scheduleStutterGroup,
+                Math.max(0, (groupEnd - audioCtx.currentTime) * 1000 - scheduleLeadMs)
+            );
+        }
+
+        // Buffer Loop Stutter Trigger
+        function triggerFreeze() {
+            if (!isPlaying || isFrozen || !audioBuffer) return;
+            clearLagCut();
+
+            if (isStuttering && stutterOutputGainNode) {
+                clearStutterScheduler();
+                if (stutterOutputGainNode) {
+                    try { stutterOutputGainNode.disconnect(); } catch (err) {}
+                    stutterOutputGainNode = null;
+                }
+            }
+
+            freezeStartOffset = getCurrentPlaybackTime();
+            isFrozen = true;
+            if (isStuttering) stutterPulseOn = true;
+
+            const isContinueOn = continueToggle.checked;
+
+            if (!isContinueOn) {
+                // TOGGLE OFF: Stop main track to keep timeline paused
+                if (sourceNode) {
+                    try { sourceNode.stop(); sourceNode.disconnect(); } catch(err){}
+                }
+            } else {
+                // TOGGLE ON: Mute main track while keeping trackStartTime intact
+                mainGainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+                if (!sourceNode) {
+                    sourceNode = audioCtx.createBufferSource();
+                    sourceNode.buffer = audioBuffer;
+                    sourceNode.loop = isLooping;
+                    sourceNode.connect(mainGainNode);
+                    sourceNode.start(0, freezeStartOffset);
+                    trackStartTime = audioCtx.currentTime - freezeStartOffset;
+                }
+            }
+
+            // Create stutter loop buffer source
+            freezeOutputGainNode = audioCtx.createGain();
+            freezeOutputGainNode.gain.value = 1;
+            freezeOutputGainNode.connect(outputMixGainNode);
+            refreshFreezeSlice();
+            if (isStuttering && !stutterInterval) {
+                stutterInterval = setInterval(pulseStutter, getStutterIntervalMs());
+            }
+
+            // UI updates
+            freezeBtn.classList.add('border-sky-500', 'bg-sky-500/10');
+            freezeIconBg.classList.add('bg-sky-500', 'text-slate-950');
+            freezeBtnLabel.innerText = 'FREEZING...';
+            setStatus('FREEZE ACTIVE', 'bg-sky-400 animate-pulse');
+        }
+
+        function triggerStutter() {
+            if (isStuttering || !isPlaying || !audioBuffer) return;
+            clearLagCut();
+            if (!isFrozen) {
+                pauseOffset = getCurrentPlaybackTime();
+                stutterPositionSec = pauseOffset;
+                if (sourceNode) {
+                    try { sourceNode.stop(); sourceNode.disconnect(); } catch (err) {}
+                    sourceNode = null;
+                }
+                stutterOutputGainNode = audioCtx.createGain();
+                stutterOutputGainNode.gain.value = 1;
+                stutterOutputGainNode.connect(outputMixGainNode);
+            }
+            isStuttering = true;
+            stutterPulseOn = true;
+            if (isFrozen && freezeOutputGainNode) {
+                freezeOutputGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.002);
+                stutterInterval = setInterval(pulseStutter, getStutterIntervalMs());
+            } else {
+                refreshStutterSlice();
+            }
+            stutterBtn.classList.add('border-fuchsia-500', 'bg-fuchsia-500/10');
+            stutterIconBg.classList.add('bg-fuchsia-500', 'text-slate-950');
+            stutterBtnLabel.innerText = 'STUTTERING...';
+        }
+
+        function releaseStutter() {
+            if (!isStuttering) return;
+            stopStutter();
+        }
+
+        function triggerBoth() {
+            triggerFreeze();
+            if (isFrozen) {
+                triggerStutter();
+                bothBtn.classList.add('border-violet-500', 'bg-violet-500/10');
+                bothIconBg.classList.add('bg-violet-500', 'text-slate-950');
+                bothBtnLabel.innerText = 'BOTH ACTIVE...';
+            }
+        }
+
+        function releaseBoth() {
+            releaseStutter();
+            releaseFreeze();
+            bothBtn.classList.remove('border-violet-500', 'bg-violet-500/10');
+            bothIconBg.classList.remove('bg-violet-500', 'text-slate-950');
+            bothBtnLabel.innerText = 'HOLD BOTH';
+        }
+
+        function pulseStutter() {
+            if (!isStuttering || !audioCtx || !isFrozen || !freezeOutputGainNode) return;
+            stutterPulseOn = !stutterPulseOn;
+            freezeOutputGainNode.gain.setTargetAtTime(stutterPulseOn ? 1 : 0.0001, audioCtx.currentTime, 0.002);
+        }
+
+        function resumeStutterSource() {
+            if (!audioBuffer || !audioCtx) return;
+            sourceNode = audioCtx.createBufferSource();
+            sourceNode.buffer = audioBuffer;
+            sourceNode.loop = isLooping;
+            sourceNode.connect(mainGainNode);
+            sourceNode.start(0, pauseOffset);
+            trackStartTime = audioCtx.currentTime - pauseOffset;
+            stutterPulseOn = true;
+        }
+
+        function stopStutter() {
+            if (stutterInterval) clearInterval(stutterInterval);
+            stutterInterval = null;
+            if (!isStuttering) return;
+            if (isFrozen && freezeOutputGainNode) {
+                freezeOutputGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.002);
+            } else {
+                clearStutterScheduler();
+                if (stutterOutputGainNode) {
+                    try { stutterOutputGainNode.disconnect(); } catch (err) {}
+                    stutterOutputGainNode = null;
+                }
+            }
+            isStuttering = false;
+            if (!isFrozen && isPlaying) resumeStutterSource();
+            stutterBtn.classList.remove('border-fuchsia-500', 'bg-fuchsia-500/10');
+            stutterIconBg.classList.remove('bg-fuchsia-500', 'text-slate-950');
+            stutterBtnLabel.innerText = 'HOLD TO STUTTER';
+        }
+
+        function getStutterIntervalMs() {
+            const bufferMs = parseFloat(bufferSlider.value);
+            const intensity = parseFloat(stutterSpeedSlider.value) / 100;
+            return Math.max(12, bufferMs * (1 - 0.85 * intensity));
+        }
+
+        function refreshStutterInterval() {
+            if (!isStuttering || !isFrozen) return;
+            clearInterval(stutterInterval);
+            stutterInterval = setInterval(pulseStutter, getStutterIntervalMs());
+        }
+
+        function scheduleLagDropout() {
+            if (lagScheduleTimeout) clearTimeout(lagScheduleTimeout);
+            const intensity = parseInt(lagSlider.value, 10) / 100;
+            if (!isPlaying || intensity <= 0) return;
+            const waitMs = 100 + Math.random() * 400 + (1 - intensity) * 4500;
+            lagScheduleTimeout = setTimeout(() => {
+                if (!isPlaying || parseInt(lagSlider.value, 10) <= 0) return;
+                if (lagCutActive) {
+                    scheduleLagDropout();
+                    return;
+                }
+                if (!isFrozen && !isStuttering) {
+                    const currentIntensity = parseInt(lagSlider.value, 10) / 100;
+                    const maxDuration = 8 + currentIntensity * 1492;
+                    const duration = Math.max(8, maxDuration * (0.25 + Math.random() * 0.75));
+                    mainGainNode.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.002);
+                    lagCutActive = true;
+                    lagReleaseTimeout = setTimeout(() => {
+                        lagCutActive = false;
+                        if (isPlaying && !isFrozen && !isStuttering) {
+                            mainGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.002);
+                        }
+                        scheduleLagDropout();
+                    }, duration);
+                } else {
+                    scheduleLagDropout();
+                }
+            }, waitMs);
+        }
+
+        function clearLagCut() {
+            if (lagReleaseTimeout) clearTimeout(lagReleaseTimeout);
+            lagReleaseTimeout = null;
+            if (lagCutActive) {
+                lagCutActive = false;
+                if (mainGainNode && audioCtx) mainGainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.002);
+            }
+        }
+
+        function stopLagSimulation() {
+            if (lagScheduleTimeout) clearTimeout(lagScheduleTimeout);
+            lagScheduleTimeout = null;
+            clearLagCut();
+        }
+
+        function scheduleLiveVoltageCreak(isFirstEvent = false) {
+            if (liveCreakTimeout) clearTimeout(liveCreakTimeout);
+            liveCreakTimeout = null;
+            const volume = parseInt(voltageCreakSlider.value, 10) / 100;
+            if (!isPlaying || volume <= 0 || !audioCtx) return;
+
+            const waitMs = isFirstEvent
+                ? 1800 + Math.random() * 6200
+                : 8000 + Math.random() * 22000;
+            liveCreakTimeout = setTimeout(() => {
+                liveCreakTimeout = null;
+                if (!isPlaying || parseInt(voltageCreakSlider.value, 10) <= 0) return;
+                playLiveVoltageCreak();
+                scheduleLiveVoltageCreak(false);
+            }, waitMs);
+        }
+
+        function playLiveVoltageCreak(includePop = false) {
+            if (!audioCtx || !voltageGainNode || !outputMixGainNode) return;
+            const volume = parseInt(voltageCreakSlider.value, 10) / 100;
+            if (volume <= 0) return;
+
+            const sampleRate = audioCtx.sampleRate;
+            const duration = 0.32;
+            const frameCount = Math.floor(sampleRate * duration);
+            const creakBuffer = audioCtx.createBuffer(1, frameCount, sampleRate);
+            const samples = creakBuffer.getChannelData(0);
+            const phase = Math.random() * Math.PI * 2;
+            for (let frame = 0; frame < frameCount; frame++) {
+                const progress = frame / frameCount;
+                const frequency = 165 - progress * 120;
+                const envelope = Math.sin(Math.PI * progress);
+                const buzz = Math.sin(phase + 2 * Math.PI * frequency * frame / sampleRate);
+                const crackle = (Math.random() * 2 - 1) * 0.22;
+                const popEnvelope = Math.exp(-frame / (sampleRate * 0.0015));
+                const pop = includePop ? (Math.random() * 2 - 1) * 0.72 * popEnvelope : 0;
+                samples[frame] = Math.max(-1, Math.min(1, (buzz * 0.7 + crackle) * envelope + pop));
+            }
+
+            const now = audioCtx.currentTime;
+            const source = audioCtx.createBufferSource();
+            const effectGain = audioCtx.createGain();
+            source.buffer = creakBuffer;
+            effectGain.gain.setValueAtTime(volume * 0.75, now);
+            source.connect(effectGain);
+            effectGain.connect(outputMixGainNode);
+            liveCreakSourceNode = source;
+            liveCreakEffectGainNode = effectGain;
+
+            voltageGainNode.gain.cancelScheduledValues(now);
+            voltageGainNode.gain.setValueAtTime(Math.max(0.08, 1 - volume * 0.92), now + 0.015);
+            voltageGainNode.gain.linearRampToValueAtTime(0.52, now + 0.18);
+            voltageGainNode.gain.linearRampToValueAtTime(1, now + 0.78);
+
+            source.onended = () => {
+                try { source.disconnect(); effectGain.disconnect(); } catch (err) {}
+                if (liveCreakSourceNode === source) liveCreakSourceNode = null;
+                if (liveCreakEffectGainNode === effectGain) liveCreakEffectGainNode = null;
+            };
+            source.start(now);
+        }
+
+        function stopLiveVoltageCreak() {
+            if (liveCreakTimeout) clearTimeout(liveCreakTimeout);
+            liveCreakTimeout = null;
+            if (liveCreakSourceNode) {
+                try { liveCreakSourceNode.stop(); liveCreakSourceNode.disconnect(); } catch (err) {}
+                liveCreakSourceNode = null;
+            }
+            if (liveCreakEffectGainNode) {
+                try { liveCreakEffectGainNode.disconnect(); } catch (err) {}
+                liveCreakEffectGainNode = null;
+            }
+            if (voltageGainNode && audioCtx) {
+                voltageGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+                voltageGainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            }
+        }
+
+        function releaseFreeze() {
+            if (!isFrozen) return;
+
+            if (freezeBufferSource) {
+                try {
+                    freezeBufferSource.stop();
+                    freezeBufferSource.disconnect();
+                } catch(err){}
+            }
+            if (freezeOutputGainNode) {
+                try { freezeOutputGainNode.disconnect(); } catch (err) {}
+                freezeOutputGainNode = null;
+            }
+
+            const isContinueOn = continueToggle.checked;
+            const resumeOffset = isContinueOn ? getCurrentPlaybackTime() : freezeStartOffset;
+
+            if (!isContinueOn && !isStuttering) {
+                // TOGGLE OFF: Resume main track right where freeze started
+                trackStartTime = audioCtx.currentTime - freezeStartOffset;
+                sourceNode = audioCtx.createBufferSource();
+                sourceNode.buffer = audioBuffer;
+                sourceNode.loop = isLooping;
+                sourceNode.connect(mainGainNode);
+                sourceNode.start(0, freezeStartOffset);
+                if (isStuttering) stutterPulseOn = true;
+                mainGainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            } else {
+                // TOGGLE ON: Song advanced in background -> unmute main track
+                mainGainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+                if (isStuttering) stutterPulseOn = true;
+            }
+
+            isFrozen = false;
+            if (isStuttering) {
+                if (sourceNode) {
+                    try { sourceNode.stop(); sourceNode.disconnect(); } catch (err) {}
+                    sourceNode = null;
+                }
+                pauseOffset = resumeOffset;
+                stutterPositionSec = resumeOffset;
+                stutterOutputGainNode = audioCtx.createGain();
+                stutterOutputGainNode.gain.value = stutterPulseOn ? 1 : 0.0001;
+                stutterOutputGainNode.connect(outputMixGainNode);
+                refreshStutterSlice();
+            }
+            freezeBtn.classList.remove('border-sky-500', 'bg-sky-500/10');
+            freezeIconBg.classList.remove('bg-sky-500', 'text-slate-950');
+            freezeBtnLabel.innerText = 'HOLD TO FREEZE';
+            setStatus('PLAYING', 'bg-sky-400');
+        }
+
+        // Toggle Switch Explanation Update
+        continueToggle.addEventListener('change', () => {
+            if (continueToggle.checked) {
+                freezeSubText.innerText = 'Timeline advances in background (skips forward on release)';
+                toggleDesc.innerHTML = '<strong class="text-sky-400">ON:</strong> Song advances in background; catches up when released.';
+            } else {
+                freezeSubText.innerText = 'Timeline pauses during freeze (or press Spacebar)';
+                toggleDesc.innerHTML = '<strong class="text-slate-300">OFF:</strong> Audio pauses during freeze and resumes from freeze point.';
+            }
+            saveConfigSettings();
+        });
+
+        // Event Controls
+        playBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isPlaying) pauseAudio();
+            else startAudio(pauseOffset);
+        });
+
+        stopBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            stopAudio();
+        });
+
+        loopBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            isLooping = !isLooping;
+            if (sourceNode) sourceNode.loop = isLooping;
+            loopBtn.classList.toggle('text-sky-400', isLooping);
+            loopBtn.classList.toggle('border-sky-500/50', isLooping);
+            saveConfigSettings();
+        });
+
+        muteAllBtn.addEventListener('click', toggleMuteAll);
+        muteLeftBtn.addEventListener('click', toggleMuteLeft);
+        muteRightBtn.addEventListener('click', toggleMuteRight);
+        applyOutputMutes();
+
+        seekSlider.addEventListener('input', (e) => {
+            const seekTime = parseFloat(e.target.value);
+            pauseOffset = seekTime;
+            if (isPlaying) {
+                startAudio(seekTime);
+            } else {
+                updateTimeDisplay();
+            }
+        });
+
+        function seekBySeconds(delta) {
+            if (!audioBuffer) return;
+            const nextTime = Math.max(0, Math.min(audioBuffer.duration, getCurrentPlaybackTime() + delta));
+            if (isPlaying) {
+                stopAudio();
+                seekSlider.value = nextTime;
+                startAudio(nextTime);
+            } else {
+                pauseOffset = nextTime;
+                seekSlider.value = nextTime;
+                updateTimeDisplay();
+            }
+        }
+
+        const keyHelpBtn = document.getElementById('keyHelpBtn');
+        const keyHelpPanel = document.getElementById('keyHelpPanel');
+        keyHelpBtn.addEventListener('click', () => {
+            const opening = keyHelpPanel.hidden;
+            keyHelpPanel.hidden = !opening;
+            keyHelpBtn.setAttribute('aria-expanded', String(opening));
+        });
+        document.addEventListener('pointerdown', (event) => {
+            if (!keyHelpPanel.hidden && !keyHelpPanel.contains(event.target) && event.target !== keyHelpBtn) {
+                keyHelpPanel.hidden = true;
+                keyHelpBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Pointer Down / Up Event Listeners for Freeze Button
+        freezeBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (freezeBtn.setPointerCapture) freezeBtn.setPointerCapture(e.pointerId);
+            if (document.activeElement) document.activeElement.blur();
+            triggerFreeze();
+        });
+        freezeBtn.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            releaseFreeze();
+        });
+        freezeBtn.addEventListener('pointercancel', () => {
+            releaseFreeze();
+        });
+
+        stutterBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (stutterBtn.setPointerCapture) stutterBtn.setPointerCapture(e.pointerId);
+            if (document.activeElement) document.activeElement.blur();
+            triggerStutter();
+        });
+        stutterBtn.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            releaseStutter();
+        });
+        stutterBtn.addEventListener('pointercancel', () => {
+            releaseStutter();
+        });
+
+        bothBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (bothBtn.setPointerCapture) bothBtn.setPointerCapture(e.pointerId);
+            if (document.activeElement) document.activeElement.blur();
+            triggerBoth();
+        });
+        bothBtn.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            releaseBoth();
+        });
+        bothBtn.addEventListener('pointercancel', () => {
+            releaseBoth();
+        });
+
+        function isShortcutBlockedByControl(target) {
+            return target instanceof Element && !!target.closest('input, textarea, select, audio, [contenteditable="true"]');
+        }
+
+        // Space holds Freeze; M holds Stutter; N holds both. Other keys are toggles/actions.
+        window.addEventListener('keydown', (e) => {
+            if (isShortcutBlockedByControl(e.target)) return;
+            const key = e.key.toLowerCase();
+
+            if (e.key === '?') {
+                e.preventDefault();
+                if (!e.repeat) keyHelpBtn.click();
+                return;
+            }
+            if (e.key === 'Escape' && !keyHelpPanel.hidden) {
+                keyHelpPanel.hidden = true;
+                keyHelpBtn.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            if (key === 'k') {
+                e.preventDefault();
+                if (!e.repeat && audioBuffer) {
+                    if (isPlaying) pauseAudio();
+                    else startAudio(pauseOffset);
+                }
+                return;
+            }
+            if (key === 'j' || key === 'l') {
+                e.preventDefault();
+                if (audioBuffer) seekBySeconds(key === 'j' ? -5 : 5);
+                return;
+            }
+            if (key === 'z' || key === 'c' || key === 'x') {
+                e.preventDefault();
+                if (!e.repeat) {
+                    if (key === 'z') toggleMuteLeft();
+                    else if (key === 'c') toggleMuteRight();
+                    else toggleMuteAll();
+                }
+                return;
+            }
+            if (key === 'v') {
+                e.preventDefault();
+                if (!e.repeat) triggerQuietSound();
+                return;
+            }
+
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                if (document.activeElement) document.activeElement.blur();
+                if (!e.repeat) triggerFreeze();
+            } else if (e.code === 'KeyM' || key === 'm') {
+                e.preventDefault();
+                if (!e.repeat) triggerStutter();
+            } else if (e.code === 'KeyN' || key === 'n') {
+                e.preventDefault();
+                if (!e.repeat) triggerBoth();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                releaseFreeze();
+            } else if (e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                releaseStutter();
+            } else if (e.code === 'KeyN' || e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                releaseBoth();
+            }
+        });
+
+        // Slider Text Binding
+        bufferSlider.addEventListener('input', (e) => {
+            bufferVal.innerText = `${e.target.value} ms`;
+            refreshStutterInterval();
+            refreshFreezeSlice();
+            refreshStutterSlice();
+        });
+
+        pitchSlider.addEventListener('input', (e) => {
+            pitchVal.innerText = `${parseFloat(e.target.value).toFixed(2)}x`;
+            if (freezeBufferSource) {
+                freezeBufferSource.playbackRate.value = parseFloat(e.target.value);
+            }
+        });
+
+        stutterSpeedSlider.addEventListener('input', (e) => {
+            stutterSpeedVal.innerText = `${parseInt(e.target.value, 10)}%`;
+            refreshStutterInterval();
+            refreshStutterSlice();
+        });
+
+        bitsSlider.addEventListener('input', (e) => {
+            const bitDepth = getSelectedBitDepth();
+            bitsVal.innerText = `${bitDepth} ${bitDepth === 1 ? 'bit' : 'bits'}`;
+            updateBitCrusherRouting();
+        });
+
+        lagSlider.addEventListener('input', (e) => {
+            const intensity = parseInt(e.target.value, 10);
+            lagVal.innerText = `${intensity}%`;
+            if (intensity === 0) stopLagSimulation();
+            else scheduleLagDropout();
+        });
+
+        voltageCreakSlider.addEventListener('input', (e) => {
+            const volume = parseInt(e.target.value, 10);
+            voltageCreakVal.innerText = `${volume}%`;
+            if (liveCreakEffectGainNode && audioCtx) {
+                liveCreakEffectGainNode.gain.setTargetAtTime(volume / 100 * 0.75, audioCtx.currentTime, 0.015);
+            }
+            if (volume === 0) stopLiveVoltageCreak();
+            else if (isPlaying && !liveCreakSourceNode) scheduleLiveVoltageCreak(true);
+        });
+
+        function triggerQuietSound() {
+            if (!isPlaying) {
+                setStatus('PLAY AUDIO FIRST', 'bg-amber-400');
+                return;
+            }
+            if (parseInt(voltageCreakSlider.value, 10) === 0) {
+                setStatus('RAISE CREAK VOLUME ABOVE 0%', 'bg-amber-400');
+                return;
+            }
+            if (liveCreakSourceNode) return;
+            if (liveCreakTimeout) clearTimeout(liveCreakTimeout);
+            liveCreakTimeout = null;
+            playLiveVoltageCreak(true);
+            scheduleLiveVoltageCreak(false);
+        }
+
+        quietSoundBtn.addEventListener('click', triggerQuietSound);
+
+        // Live Performance Recorder
+        function isIOS12Safari() {
+            return /(?:iPhone|iPad|iPod).*OS 12[_\d]*/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent);
+        }
+
+        function configureMp3Export(link, blob, filename, url) {
+            link.href = url;
+            link.download = filename;
+            // Keep legacy Safari on the current page instead of using a popup path.
+            link.target = '_self';
+            link.onclick = async (event) => {
+                if (typeof File === 'undefined' || !navigator.share || !navigator.canShare) {
+                    if (isIOS12Safari()) {
+                        alert('iOS 12 opens this MP3 in Safari preview. In the preview, tap Share, then choose Save to Files.');
+                    }
+                    return;
+                }
+
+                let mp3File;
+                try {
+                    mp3File = new File([blob], filename, { type: 'audio/mpeg' });
+                    if (!navigator.canShare({ files: [mp3File] })) {
+                        if (isIOS12Safari()) {
+                            alert('In the MP3 preview, tap Safari’s Share button and choose Save to Files.');
+                        }
+                        return;
+                    }
+                } catch (error) {
+                    if (isIOS12Safari()) {
+                        alert('In the MP3 preview, tap Safari’s Share button and choose Save to Files.');
+                    }
+                    return;
+                }
+
+                event.preventDefault();
+                try {
+                    await navigator.share({ files: [mp3File], title: filename });
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        alert('Sharing did not complete. Try opening the MP3 preview and using Safari’s Share button.');
+                    }
+                }
+            };
+        }
+
+        recBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        function startRecording() {
+            if (isCountingDown) {
+                clearInterval(recCountdownInterval);
+                recCountdownInterval = null;
+                isCountingDown = false;
+                recTimer.innerText = '00:00';
+                recBtnText.innerText = 'Record';
+                recDot.classList.remove('animate-ping');
+                return;
+            }
+            // Resume audio while still inside the Record gesture; older Safari versions
+            // may block starting Web Audio later from the countdown timer callback.
+            if (audioBuffer) initAudioContext();
+            isCountingDown = true;
+            let count = 3;
+            recBtnText.innerText = `Get Ready · ${count}`;
+            recTimer.innerText = `00:0${count}`;
+            recCountdownInterval = setInterval(() => {
+                count -= 1;
+                if (count > 0) {
+                    recBtnText.innerText = `Get Ready · ${count}`;
+                    recTimer.innerText = `00:0${count}`;
+                    return;
+                }
+                clearInterval(recCountdownInterval);
+                recCountdownInterval = null;
+                isCountingDown = false;
+                recTimer.innerText = '00:00';
+                beginRecordingCapture();
+            }, 1000);
+        }
+
+        function beginRecordingCapture() {
+            initAudioContext();
+            recordedChunks = [];
+            recordingPreview.pause();
+            recordingPreview.removeAttribute('src');
+            recordingPreview.classList.add('hidden');
+            if (performancePreviewUrl) {
+                URL.revokeObjectURL(performancePreviewUrl);
+                performancePreviewUrl = null;
+            }
+            downloadLink.querySelector('span').innerText = 'Export MP3';
+
+            let mimeType = 'audio/webm';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+
+            mediaRecorder = new MediaRecorder(mediaStreamDest.stream, mimeType ? { mimeType } : undefined);
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                downloadLink.classList.add('hidden');
+                downloadLink.querySelector('span').innerText = 'Encoding MP3…';
+                let usedSourceFallback = false;
+                try {
+                    const recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    let encodedAudio;
+                    try {
+                        if (!recordedChunks.length || recordedBlob.size === 0) {
+                            throw new Error('The recording contains no audio data.');
+                        }
+                        encodedAudio = await audioCtx.decodeAudioData(await recordedBlob.arrayBuffer());
+                        if (!encodedAudio.length) throw new Error('The recording is empty.');
+                    } catch (decodeError) {
+                        if (!audioBuffer) throw decodeError;
+                        // Some browsers produce no MediaRecorder data for an empty take.
+                        // Use the loaded source as a valid fallback instead of failing MP3 encoding.
+                        encodedAudio = audioBuffer;
+                        usedSourceFallback = true;
+                    }
+                    const mp3Blob = encodeMp3(encodedAudio);
+                    const url = URL.createObjectURL(mp3Blob);
+                    performancePreviewUrl = url;
+                    recordingPreview.src = url;
+                    recordingPreview.load();
+                    recordingPreview.classList.remove('hidden');
+                    configureMp3Export(downloadLink, mp3Blob, `${currentFileBaseName}-Corrupted.mp3`, url);
+                    downloadLink.classList.remove('hidden');
+                } catch (error) {
+                    alert('MP3 export failed. Please try recording again in a supported browser.');
+                } finally {
+                    downloadLink.querySelector('span').innerText = usedSourceFallback ? 'Export Source Audio' : 'Export MP3';
+                }
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            if (audioBuffer && !isPlaying) {
+                const startOffset = pauseOffset >= audioBuffer.duration ? 0 : pauseOffset;
+                startAudio(startOffset);
+            }
+            recStartTime = Date.now();
+            recBtnText.innerText = 'Stop';
+            recDot.classList.add('animate-ping');
+            downloadLink.classList.add('hidden');
+
+            recTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recStartTime) / 1000);
+                const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const s = (elapsed % 60).toString().padStart(2, '0');
+                recTimer.innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        randomIntensitySlider.addEventListener('input', (e) => {
+            randomIntensityVal.innerText = `${e.target.value}%`;
+        });
+
+        document.querySelectorAll('.randomModeBtn').forEach((button) => {
+            button.addEventListener('click', () => {
+                randomExportMode = button.dataset.randomMode;
+                updateRandomModeButtons();
+                saveConfigSettings();
+            });
+        });
+
+        randomExportBtn.addEventListener('click', async () => {
+            if (!audioBuffer) return;
+            randomExportBtn.disabled = true;
+            randomDownloadLink.classList.add('hidden');
+            randomExportBtn.innerText = 'Building MP3…';
+            try {
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+                const corruptedBuffer = buildRandomCorruptionBuffer(
+                    audioBuffer,
+                    randomExportMode,
+                    parseInt(randomIntensitySlider.value, 10)
+                );
+                const mp3Blob = encodeMp3(corruptedBuffer);
+                const url = URL.createObjectURL(mp3Blob);
+                configureMp3Export(randomDownloadLink, mp3Blob, `${currentFileBaseName}-corrupt-injection.mp3`, url);
+                randomDownloadLink.classList.remove('hidden');
+            } catch (error) {
+                alert('Random MP3 export failed. Please try again.');
+            } finally {
+                randomExportBtn.disabled = false;
+                randomExportBtn.innerText = 'Random Corrupt & Export';
+            }
+        });
+
+        function buildRandomCorruptionBuffer(source, mode, intensityPercent) {
+            // Always make the export stereo so left/right dropout events also work
+            // when the imported source itself is mono.
+            const channels = 2;
+            const result = audioCtx.createBuffer(channels, source.length, source.sampleRate);
+            const originals = [];
+            for (let channel = 0; channel < channels; channel++) {
+                originals[channel] = source.getChannelData(Math.min(channel, source.numberOfChannels - 1));
+                result.getChannelData(channel).set(originals[channel]);
+            }
+
+            const sampleRate = source.sampleRate;
+            const totalFrames = source.length;
+            const chance = intensityPercent / 100;
+            const freezeRate = parseFloat(pitchSlider.value);
+            const stutterIntensity = parseFloat(stutterSpeedSlider.value) / 100;
+            const stutterChunkMs = Math.max(12, parseFloat(bufferSlider.value) * (1 - 0.85 * stutterIntensity));
+            const stutterChunkFrames = Math.max(64, Math.floor(sampleRate * stutterChunkMs / 1000));
+            const heavyCorruptionWindows = [];
+
+            // Schedule irregular injection moments across the clip. Most gaps
+            // are moderate, with occasional quick bursts and longer 30–60s waits.
+            const quickGapFrames = [1, 4].map((seconds) => Math.floor(sampleRate * seconds));
+            const mediumGapFrames = [8, 25].map((seconds) => Math.floor(sampleRate * seconds));
+            const longGapFrames = [30, 60].map((seconds) => Math.floor(sampleRate * seconds));
+            let nextEventFrame = Math.floor(Math.random() * Math.min(totalFrames, sampleRate * 5));
+            while (nextEventFrame < totalFrames) {
+                if (Math.random() < chance) {
+                    const start = nextEventFrame;
+                    // Higher intensity increases both how often events happen and how
+                    // long each event lasts, making 100% feel noticeably heavier.
+                    const durationScale = 0.75 + chance * 1.25;
+                    const eventSeconds = (mode === 'everything'
+                        ? 0.55 + Math.random() * 0.85
+                        : 0.12 + Math.random() * 0.48) * durationScale;
+                    const eventFrames = Math.min(
+                        Math.floor(sampleRate * eventSeconds),
+                        totalFrames - start
+                    );
+                    const selectedType = mode;
+                    const muteSeconds = (0.25 + Math.random() * 1.75) * (0.75 + chance * 1.25);
+                    const muteFrames = Math.min(Math.floor(sampleRate * muteSeconds), totalFrames - start);
+                    const muteRoll = Math.random();
+                    const muteLeft = muteRoll < 0.4 || muteRoll >= 0.8;
+                    const muteRight = muteRoll >= 0.4;
+                    if (selectedType === 'everything') {
+                        heavyCorruptionWindows.push({ start: start + eventFrames });
+                    }
+                    for (let channel = 0; channel < channels; channel++) {
+                        const output = result.getChannelData(channel);
+                        const original = originals[channel];
+                        if (selectedType === 'mute') {
+                            if ((channel === 0 && muteLeft) || (channel === 1 && muteRight)) {
+                                output.fill(0, start, start + muteFrames);
+                            }
+                        } else if (selectedType === 'everything') {
+                            const chunkFrames = Math.max(24, Math.floor(stutterChunkFrames / 3));
+                            repeatBufferSegment(original, output, start, eventFrames,
+                                Math.min(chunkFrames, eventFrames), freezeRate);
+                            applyAggressiveDamage(output, start, eventFrames, intensityPercent / 100);
+                        } else if (selectedType === 'both') {
+                            const split = Math.floor(eventFrames / 2);
+                            repeatBufferSegment(original, output, start, split, Math.min(eventFrames, Math.floor(sampleRate * 0.12)), freezeRate);
+                            repeatBufferSegment(original, output, start + split, eventFrames - split,
+                                Math.min(stutterChunkFrames, eventFrames - split), 1);
+                        } else if (selectedType === 'freeze') {
+                            repeatBufferSegment(original, output, start, eventFrames,
+                                Math.min(eventFrames, Math.floor(sampleRate * 0.12)), freezeRate);
+                        } else {
+                            repeatBufferSegment(original, output, start, eventFrames,
+                                Math.min(stutterChunkFrames, eventFrames), 1);
+                        }
+                    }
+                }
+
+                const gapRoll = Math.random();
+                const gapRange = gapRoll < 0.15 ? quickGapFrames
+                    : gapRoll < 0.70 ? mediumGapFrames : longGapFrames;
+                const gap = gapRange[0] + Math.floor(Math.random() * (gapRange[1] - gapRange[0] + 1));
+                nextEventFrame += gap;
+            }
+
+            // Heavy damage can occasionally lead into a short freeze and a
+            // speaker fault: a voltage creak at 60–79%, or a pop at 80%+.
+            const eligibleFaultWindows = heavyCorruptionWindows.filter(() =>
+                (intensityPercent >= 70 && intensityPercent <= 75) || intensityPercent >= 80
+            );
+            for (const heavyWindow of eligibleFaultWindows) {
+                const faultChance = intensityPercent <= 75
+                    ? 0.18 + ((intensityPercent - 70) / 5) * 0.08
+                    : 0.26 + ((intensityPercent - 80) / 20) * 0.12;
+                if (Math.random() >= faultChance) continue;
+
+                const freezeStart = Math.min(totalFrames, heavyWindow.start + Math.floor(sampleRate * (0.35 + Math.random() * 1.8)));
+                const freezeFrames = Math.min(Math.floor(sampleRate * (0.35 + Math.random() * 0.9)), totalFrames - freezeStart);
+                const freezeChunk = Math.max(32, Math.floor(sampleRate * (0.045 + Math.random() * 0.05)));
+                for (let channel = 0; channel < channels; channel++) {
+                    repeatBufferSegment(originals[channel], result.getChannelData(channel), freezeStart,
+                        freezeFrames, freezeChunk, 1);
+                }
+
+                const faultStart = Math.min(totalFrames, freezeStart + freezeFrames);
+                if (intensityPercent < 80) {
+                    for (let channel = 0; channel < channels; channel++) {
+                        applyVoltageCreak(result.getChannelData(channel), faultStart + channel * Math.floor(sampleRate * 0.003), sampleRate);
+                    }
+                } else {
+                    for (let channel = 0; channel < channels; channel++) {
+                        applySpeakerPop(result.getChannelData(channel), faultStart + channel * Math.floor(sampleRate * 0.002), sampleRate);
+                    }
+                }
+            }
+
+            // Permanent channel loss is exceptionally uncommon and only possible
+            // from 80% intensity upward, after a heavy-damage window.
+            if (intensityPercent >= 80 && heavyCorruptionWindows.length > 0) {
+                const permanentMuteChance = 0.01 + ((intensityPercent - 80) / 20) * 0.035;
+                if (Math.random() < permanentMuteChance) {
+                    const heavyWindow = heavyCorruptionWindows[Math.floor(Math.random() * heavyCorruptionWindows.length)];
+                    const freezeStart = Math.min(totalFrames, heavyWindow.start + Math.floor(sampleRate * (0.5 + Math.random() * 2)));
+                    const freezeFrames = Math.min(Math.floor(sampleRate * (0.5 + Math.random() * 1.1)), totalFrames - freezeStart);
+                    const freezeChunk = Math.max(32, Math.floor(sampleRate * 0.06));
+                    for (let channel = 0; channel < channels; channel++) {
+                        repeatBufferSegment(originals[channel], result.getChannelData(channel), freezeStart,
+                            freezeFrames, freezeChunk, 1);
+                    }
+                    const faultStart = Math.min(totalFrames, freezeStart + freezeFrames);
+                    for (let channel = 0; channel < channels; channel++) {
+                        applySpeakerPop(result.getChannelData(channel), faultStart + channel * Math.floor(sampleRate * 0.002), sampleRate);
+                    }
+                    const targetRoll = Math.random();
+                    const muteLeft = targetRoll < 0.4 || targetRoll >= 0.8;
+                    const muteRight = targetRoll >= 0.4;
+                    const muteStart = Math.min(totalFrames, faultStart + Math.floor(sampleRate * 0.06));
+                    if (muteLeft) result.getChannelData(0).fill(0, muteStart, totalFrames);
+                    if (muteRight) result.getChannelData(1).fill(0, muteStart, totalFrames);
+                }
+            }
+
+            // Other heavy-event mutes remain rare and last a random number of seconds.
+            for (const heavyWindow of heavyCorruptionWindows) {
+                if (Math.random() >= 0.10 + chance * 0.15) continue;
+                const delayFrames = Math.floor(sampleRate * (0.08 + Math.random() * 1.2));
+                const muteStart = Math.min(totalFrames, heavyWindow.start + delayFrames);
+                const maxMuteSeconds = 6 + Math.round(chance * 4);
+                const muteDurationSeconds = 1 + Math.floor(Math.random() * maxMuteSeconds);
+                const muteEnd = Math.min(totalFrames, muteStart + Math.floor(sampleRate * muteDurationSeconds));
+                const targetRoll = Math.random();
+                const muteLeft = targetRoll < 0.425 || targetRoll >= 0.85;
+                const muteRight = targetRoll >= 0.425;
+                if (muteLeft) result.getChannelData(0).fill(0, muteStart, muteEnd);
+                if (muteRight) result.getChannelData(1).fill(0, muteStart, muteEnd);
+            }
+            return result;
+        }
+
+        function repeatBufferSegment(original, output, start, length, chunkLength, playbackRate) {
+            if (length <= 0 || chunkLength <= 0) return;
+            const available = Math.min(chunkLength, original.length - start);
+            if (available <= 0) return;
+            for (let frame = 0; frame < length && start + frame < output.length; frame++) {
+                const sourceFrame = start + (Math.floor(frame * playbackRate) % available);
+                output[start + frame] = original[sourceFrame];
+            }
+        }
+
+        function applyAggressiveDamage(samples, start, length, intensity) {
+            const end = Math.min(samples.length, start + length);
+            let frame = start;
+            while (frame < end) {
+                const gapLength = Math.max(1, Math.floor(0.003 * audioBuffer.sampleRate * (1 + Math.random() * 4)));
+                if (Math.random() < 0.16 + intensity * 0.24) {
+                    samples.fill(0, frame, Math.min(end, frame + gapLength));
+                } else {
+                    const clipGain = 2.5 + intensity * 4;
+                    const blockEnd = Math.min(end, frame + gapLength);
+                    for (let i = frame; i < blockEnd; i++) {
+                        samples[i] = Math.max(-0.92, Math.min(0.92, samples[i] * clipGain));
+                    }
+                }
+                frame += gapLength;
+            }
+        }
+
+        function applySpeakerPop(samples, start, sampleRate) {
+            const length = Math.floor(sampleRate * 0.035);
+            const phase = Math.random() * Math.PI * 2;
+            const frequency = 65 + Math.random() * 85;
+            for (let frame = 0; frame < length && start + frame < samples.length; frame++) {
+                const envelope = Math.exp(-frame / (sampleRate * 0.005));
+                const transient = Math.sin(phase + 2 * Math.PI * frequency * frame / sampleRate) * 0.38;
+                const crack = (Math.random() * 2 - 1) * (frame < sampleRate * 0.002 ? 0.4 : 0.08);
+                const index = start + frame;
+                samples[index] = Math.max(-1, Math.min(1, samples[index] + (transient + crack) * envelope));
+            }
+        }
+
+        function applyVoltageCreak(samples, start, sampleRate) {
+            const length = Math.floor(sampleRate * 0.28);
+            const phase = Math.random() * Math.PI * 2;
+            for (let frame = 0; frame < length && start + frame < samples.length; frame++) {
+                const progress = frame / Math.max(1, length);
+                const frequency = 150 - progress * 105;
+                const envelope = Math.sin(Math.PI * progress) * 0.22;
+                const buzz = Math.sin(phase + 2 * Math.PI * frequency * frame / sampleRate);
+                const crackle = (Math.random() * 2 - 1) * 0.16;
+                const index = start + frame;
+                samples[index] = Math.max(-1, Math.min(1, samples[index] + (buzz * 0.72 + crackle) * envelope));
+            }
+        }
+
+        function encodeMp3(buffer) {
+            if (!window.lamejs) throw new Error('MP3 encoder is unavailable');
+            const channels = Math.min(buffer.numberOfChannels, 2);
+            const sampleRate = buffer.sampleRate;
+            const encoder = new lamejs.Mp3Encoder(channels, sampleRate, 192);
+            const left = floatToInt16(buffer.getChannelData(0));
+            const right = channels === 2 ? floatToInt16(buffer.getChannelData(1)) : undefined;
+            const chunks = [];
+            const blockSize = 1152;
+            for (let i = 0; i < left.length; i += blockSize) {
+                const leftChunk = left.subarray(i, i + blockSize);
+                const rightChunk = right && right.subarray(i, i + blockSize);
+                const mp3buf = channels === 2
+                    ? encoder.encodeBuffer(leftChunk, rightChunk)
+                    : encoder.encodeBuffer(leftChunk);
+                if (mp3buf.length) chunks.push(new Uint8Array(mp3buf));
+            }
+            const end = encoder.flush();
+            if (end.length) chunks.push(new Uint8Array(end));
+            return new Blob(chunks, { type: 'audio/mpeg' });
+        }
+
+        function floatToInt16(samples) {
+            const pcm = new Int16Array(samples.length);
+            for (let i = 0; i < samples.length; i++) {
+                const sample = Math.max(-1, Math.min(1, samples[i]));
+                pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
+            }
+            return pcm;
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                clearInterval(recTimerInterval);
+                recBtnText.innerText = 'Record';
+                recDot.classList.remove('animate-ping');
+            }
+        }
+
+        // Waveform Visualizer Loop
+        function startVisualizer() {
+            if (visualizerStarted) return;
+            visualizerStarted = true;
+            requestAnimationFrame(renderVisualizer);
+        }
+
+        function renderVisualizer() {
+            requestAnimationFrame(renderVisualizer);
+
+            const width = canvas.width = canvas.parentElement.clientWidth;
+            const height = canvas.height = canvas.parentElement.clientHeight;
+
+            canvasCtx.fillStyle = '#020617';
+            canvasCtx.fillRect(0, 0, width, height);
+
+            const activeAnalyzer = isMicRecording && micAnalyzerNode ? micAnalyzerNode : analyzerNode;
+            if (activeAnalyzer && (isPlaying || isMicRecording)) {
+                const bufferLength = activeAnalyzer.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                activeAnalyzer.getByteTimeDomainData(dataArray);
+
+                canvasCtx.lineWidth = isMicRecording || isFrozen ? 2.5 : 1.5;
+                canvasCtx.strokeStyle = isMicRecording ? '#ef4444' : (isFrozen ? '#38bdf8' : '#0284c7');
+                canvasCtx.beginPath();
+
+                const sliceWidth = width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = (v * height) / 2;
+
+                    if (i === 0) canvasCtx.moveTo(x, y);
+                    else canvasCtx.lineTo(x, y);
+
+                    x += sliceWidth;
+                }
+
+                canvasCtx.lineTo(width, height / 2);
+                canvasCtx.stroke();
+            } else {
+                canvasCtx.strokeStyle = '#0f172a';
+                canvasCtx.lineWidth = 1;
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, height / 2);
+                canvasCtx.lineTo(width, height / 2);
+                canvasCtx.stroke();
+            }
+
+            if (isPlaying) {
+                const currTime = getCurrentPlaybackTime();
+                seekSlider.value = currTime;
+                updateTimeDisplay();
+
+                if (!isLooping && currTime >= audioBuffer.duration) {
+                    stopAudio();
+                }
+            }
+        }
+
+        function updateTimeDisplay() {
+            const currTime = getCurrentPlaybackTime();
+            currentTimeText.innerText = formatTime(currTime);
+        }
+
+        function setStatus(text, dotColorClass) {
+            statusText.innerText = text;
+            statusDot.className = `w-2 h-2 rounded-full ${dotColorClass}`;
+        }
+
+        function formatTime(seconds) {
+            if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+
+            const totalSeconds = Math.floor(seconds);
+            const hours = Math.floor(totalSeconds / 3600);
+            const mins = Math.floor(totalSeconds / 60) % 60;
+            const secs = totalSeconds % 60;
+            const mm = mins.toString().padStart(2, '0');
+            const ss = secs.toString().padStart(2, '0');
+
+            if (hours > 0) {
+                return `${hours.toString().padStart(2, '0')}:${mm}:${ss}`;
+            }
+            return `${mm}:${ss}`;
+        }
+    </script>
+    <script>
+        // PWA APIs require a secure origin. Direct file:// use stays unchanged and offline.
+        const isPwaOrigin = location.protocol === 'https:' ||
+            (location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname));
+        // Keep every top-level PWA visit on the offline entry URL. The studio
+        // runs inside this page from offline.html, so the iframe itself stays put.
+        if (isPwaOrigin && window.top === window.self && location.pathname.endsWith('/audio-corruptions.html')) {
+            window.location.replace(new URL('./PWA/offline.html', location.href));
+        }
+        if (isPwaOrigin && 'serviceWorker' in navigator) {
+            const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+            const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+            const isAppleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            let pendingInstallPrompt = null;
+
+            if (!isStandaloneApp) {
+                pwaInstallBtn.classList.remove('hidden');
+                if (isAppleMobile) {
+                    pwaInstallBtn.textContent = 'Install iOS';
+                    pwaInstallBtn.setAttribute('aria-label', 'Download iOS install profile');
+                }
+            }
+            window.addEventListener('beforeinstallprompt', (event) => {
+                event.preventDefault();
+                pendingInstallPrompt = event;
+                pwaInstallBtn.classList.remove('hidden');
+            });
+            window.addEventListener('appinstalled', () => {
+                pendingInstallPrompt = null;
+                pwaInstallBtn.classList.add('hidden');
+            });
+            pwaInstallBtn.addEventListener('click', async () => {
+                if (pendingInstallPrompt) {
+                    await pendingInstallPrompt.prompt();
+                    await pendingInstallPrompt.userChoice;
+                    pendingInstallPrompt = null;
+                    return;
+                }
+                if (isAppleMobile) {
+                    const makeUuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+                        const random = Math.random() * 16 | 0;
+                        return (char === 'x' ? random : (random & 3 | 8)).toString(16);
+                    }).toUpperCase();
+                    const escapeXml = (value) => String(value).replace(/[<>&"']/g, (char) => ({
+                        '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;'
+                    })[char]);
+                    const launchUrl = new URL('./PWA/offline.html', location.href).href;
+                    const iconData = 'iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAADvUlEQVR42u3dwXHbMBBGYRrDu4+uQT5lVI4qSAEpIwWkApWj8U3t5OoZyRRFiuBi8b1bPLFEAg8/QHBJv71/fA7APYomADlADpAD5AA5QA6QA+QAOUAOgBwgB8gBcoAcIAfIAXKAHCAHQA48ZOzqbA/ny/d/Xk9HBkiOO2bc/Ql6lOMnD/jRuxzTBvCjXznm9D0/epRjfq/zw6UsyAFymCnIQSZygBwgB8gBclhdksMFC6XIAXKAHBgSlgmq25Mctev2rCvbliNs3R6xdpZD3R451O2RYwOupyM/upNjZpevMYNV9jmQS45nx/ReGSB7JAfIgfhyyGpydLpMIYfYIAfYTA7sL8fKUWgQSw5zQX9y6DBygBwuWMgRrX31k+RAN3JUHu7SZfB6ay/UNq1kCIbWX6hd9GXlUtaGWsaC1IM5deUIfvJbT/wVKuwlxxOtGaehD+fLHPmaCI+yb2ykfKw+zQvXu1tzeMtDS3IE762nBveCJIgcHsWcgiTTyl35Fgw+XtaWQ2wku/IvVqM2hUPLIUWSy1FtTqk/QCt8Y8zUccs+59rlJWE8tr4UXTzmXvtmqfUfNXPffeYB3B7Pgg8fvQSsz7+dO8eVscW197JB1vl9nIe/eNs+xYWJ903Y57CHEVuO6dhYECpB+myXhW2Fc+86Ocxx001ROsn5ZB7UicximFrftDGttChQyu38qnKIDVcrmYdsza8LUmc/ygzj4ac+Kj2YMXEYYd1d78H1dFx5dmM0M9q6AxdkrpnfC099yGgqGXra37v9+YQuow4OW5bw/ebzdhUzE//ZjbdKk0iLg6245VHTlWWntlehXXF3LbKLh/Nlx+W5acV9ZnKE6bOGFh9FpUWa2rCXN5rkUC/YqxwxE2iLo9riMyXH5g5VEHSjryCHSGtQjuDbDz00lOQAOeLFxktG/Kb5Wszr1hZNylGzZXfpxZVfuvUxm1bkIjlAjuYG9+JKW3IsbwVljpJDIJEj9WVn2JAjB4PJEbsXY4ZHMVbERl/J0aJPDx9trX9SppVWH2MkR6uRs+Zzbn93ryAcUz5lylHJAXKAHCYFcmze4vZFJIdxTw6QY9/aGWRIjmgbzLntLDaYkWrNEWeDOTdv7x+fWmF46V8klRzIP7WRA+QAOUAOkKOppWW+y2lygBwgB8hh+4scIAfIAXL0t4zIWjBADgxV6zn+/fnSsvX5/feX5IBpBeQAOUAOkAPkADkAcmDwxBskB8gBcoAcIAfIAXKAHAA5QA6QA+QAOUAOkAPkQEL+A1iDiXqYP4YlAAAAAElFTkSuQmCC';
+                    const profileXml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>PayloadContent</key><array><dict>
+    <key>FullScreen</key><true/>
+    <key>Icon</key><data>${iconData}</data>
+    <key>IgnoreManifestScope</key><false/>
+    <key>IsRemovable</key><true/>
+    <key>Label</key><string>Audio Corruption</string>
+    <key>Precomposed</key><true/>
+    <key>URL</key><string>${escapeXml(launchUrl)}</string>
+    <key>PayloadDescription</key><string>Full-screen Audio Corruption offline web clip.</string>
+    <key>PayloadDisplayName</key><string>Audio Corruption Web Clip</string>
+    <key>PayloadIdentifier</key><string>local.audiocorruption.webclip</string>
+    <key>PayloadType</key><string>com.apple.webClip.managed</string>
+    <key>PayloadUUID</key><string>${makeUuid()}</string>
+    <key>PayloadVersion</key><integer>1</integer>
+  </dict></array>
+  <key>PayloadDescription</key><string>Adds Audio Corruption to the Home Screen.</string>
+  <key>PayloadDisplayName</key><string>Audio Corruption</string>
+  <key>PayloadIdentifier</key><string>local.audiocorruption.profile</string>
+  <key>PayloadOrganization</key><string>Audio Corruption</string>
+  <key>PayloadRemovalDisallowed</key><false/>
+  <key>PayloadScope</key><string>User</string>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>${makeUuid()}</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict></plist>`;
+                    const profile = new Blob([profileXml], { type: 'application/x-apple-aspen-config' });
+                    const profileUrl = URL.createObjectURL(profile);
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = profileUrl;
+                    downloadLink.download = 'Audio-Corruption-WebClip.mobileconfig';
+                    downloadLink.style.display = 'none';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    downloadLink.remove();
+                    setTimeout(() => URL.revokeObjectURL(profileUrl), 60000);
+                    alert('The install profile was downloaded. Open Settings > Profile Downloaded to install Audio Corruption. Open it once online to prepare offline use.');
+                } else {
+                    alert('Open your browser menu and choose Install Audio Stutter Studio or Add to Home Screen.');
+                }
+            });
+
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = './manifest.webmanifest';
+            document.head.appendChild(manifestLink);
+            [
+                ['apple-mobile-web-app-capable', 'yes'],
+                ['apple-mobile-web-app-status-bar-style', 'black-translucent'],
+                ['apple-mobile-web-app-title', 'Audio Corruption']
+            ].forEach(([name, content]) => {
+                const meta = document.createElement('meta');
+                meta.name = name;
+                meta.content = content;
+                document.head.appendChild(meta);
+            });
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js').catch((error) => {
+                    console.warn('PWA service worker could not be registered:', error);
+                });
+            });
+        } else if (location.protocol === 'http:') {
+            document.getElementById('pwaProtocolNotice').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

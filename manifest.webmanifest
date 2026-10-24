@@ -1,0 +1,17 @@
+{
+  "id": "./PWA/offline.html",
+  "name": "Audio Corruption",
+  "short_name": "Audio Corruption",
+  "description": "Offline audio playback and corruption effects studio.",
+  "start_url": "./PWA/offline.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080c14",
+  "theme_color": "#080c14",
+  "orientation": "any",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./audio-corruptions.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
